@@ -40,16 +40,11 @@ function sendMessage(chat_id, text) {
 
 function doPost(e) {
   var contents = JSON.parse(e.postData.contents);
-  var message = contents.message || contents.edited_message || contents.channel_post || {};
+  var message = _resolveTelegramMessage(contents);
   var chat = message.chat || {};
   var chat_id = chat.id || (message.from && message.from.id);
-  var text = "";
-  if (typeof message.text === "string") {
-    text = message.text;
-  } else if (typeof message.caption === "string") {
-    text = message.caption;
-  }
-  var document = message.document || (message.reply_to_message && message.reply_to_message.document);
+  var text = _extractTextCandidate(message);
+  var document = _extractDocumentCandidate(message);
 
   if (document) {
     var fileName = document.file_name || "";
@@ -109,6 +104,32 @@ function doPost(e) {
   }
   // Comando /start → disattiva mute e invia messaggio di attivazione
 
+}
+
+function _resolveTelegramMessage(update) {
+  if (!update || typeof update !== "object") return {};
+  var message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
+  if (message && typeof message === "object") return message;
+  if (update.callback_query && update.callback_query.message) return update.callback_query.message;
+  return {};
+}
+
+function _extractTextCandidate(message) {
+  if (!message || typeof message !== "object") return "";
+  if (typeof message.text === "string") return message.text;
+  if (typeof message.caption === "string") return message.caption;
+  var reply = message.reply_to_message;
+  if (reply && typeof reply.text === "string") return reply.text;
+  if (reply && typeof reply.caption === "string") return reply.caption;
+  return "";
+}
+
+function _extractDocumentCandidate(message) {
+  if (!message || typeof message !== "object") return null;
+  if (message.document) return message.document;
+  var reply = message.reply_to_message;
+  if (reply && reply.document) return reply.document;
+  return null;
 }
 
 function fetchTelegramFile(fileId) {
