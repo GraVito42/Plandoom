@@ -2,20 +2,33 @@ var token = PropertiesService.getScriptProperties().getProperty('BOT_TOKEN');;
 var telegramUrl = "https://api.telegram.org/bot" + token; 
 var webAppUrl = "https://script.google.com/macros/s/AKfycbylRBQRa_VU-S1iJyRZLzw2BgPDOh51DD8rLYtFJlmXCK3CdEeBqDuzlF77furGfi5b/exec"; 
 
-function isJson(value) {
-  if (value === null || value === undefined) return false;
-  if (typeof value === 'object') return true;
-  if (typeof value === 'string') {
-    var t = value.trim();
-    if (!t) return false;
-    try {
-      JSON.parse(t);
-      return true;
-    } catch (_) {
-      return false;
-    }
+function _validateJsonCandidate(value) {
+  if (value === null || value === undefined) {
+    return { valid: false, reason: "Nessun contenuto" };
   }
-  return false;
+  if (typeof value === "object") {
+    return { valid: true };
+  }
+  if (typeof value !== "string") {
+    return { valid: false, reason: "Formato non supportato" };
+  }
+
+  var t = value.trim();
+  if (!t) {
+    return { valid: false, reason: "Testo vuoto" };
+  }
+
+  try {
+    JSON.parse(t);
+    return { valid: true };
+  } catch (err) {
+    var msg = err && err.message ? err.message : "JSON non valido";
+    return { valid: false, reason: msg };
+  }
+}
+
+function isJson(value) {
+  return _validateJsonCandidate(value).valid;
 }
 
 
@@ -50,8 +63,9 @@ function doPost(e) {
 
     try {
       var payload = fetchTelegramFile(document.file_id);
-      if (!isJson(payload)) {
-        sendMessage(chat_id, "❌ Il file JSON non è valido: controlla il contenuto e riprova.");
+      var fileCheck = _validateJsonCandidate(payload);
+      if (!fileCheck.valid) {
+        sendMessage(chat_id, "❌ Il file JSON non è valido: " + fileCheck.reason + ".");
         return;
       }
 
@@ -67,7 +81,9 @@ function doPost(e) {
     return;
   }
 
-  if (isJson(text)) {
+  var textCheck = _validateJsonCandidate(text);
+
+  if (textCheck.valid) {
     var res = sendGlando(text);
 
     if (res && res.ok) {
@@ -76,6 +92,9 @@ function doPost(e) {
     else {
       sendMessage(chat_id, "❌ Import fallito: " + (res && res.error ? res.error : "errore sconosciuto"));
     }
+  }
+  else if (typeof text === "string" && text.trim()) {
+    sendMessage(chat_id, "❌ Il testo inviato non è un JSON valido: " + textCheck.reason + ".");
   }
   else{
     if (text === "/start") {
