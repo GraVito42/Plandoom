@@ -27,14 +27,27 @@ function _validateJsonCandidate(value) {
   }
 }
 
-function isJson(value) {
-  return _validateJsonCandidate(value).valid;
-}
-
-
 function sendMessage(chat_id, text) {
   var url = telegramUrl + "/sendMessage?chat_id=" + chat_id + "&text=" + encodeURIComponent(text);
   var response = UrlFetchApp.fetch(url);
+}
+
+
+function _handleJsonPayload(chatId, payload, source) {
+  var check = _validateJsonCandidate(payload);
+  if (!check.valid) {
+    var target = source === "file" ? "Il file JSON" : "Il testo inviato";
+    sendMessage(chatId, "❌ " + target + " non è valido: " + check.reason + ".");
+    return;
+  }
+
+  var res = sendGlando(payload);
+
+  if (res && res.ok) {
+    sendMessage(chatId, "✅ " + (res.summary || "Eventi caricati! Controlla Google Calendar e Notion."));
+  } else {
+    sendMessage(chatId, "❌ Import fallito: " + (res && res.error ? res.error : "errore sconosciuto"));
+  }
 }
 
 
@@ -58,18 +71,7 @@ function doPost(e) {
 
     try {
       var payload = fetchTelegramFile(document.file_id);
-      var fileCheck = _validateJsonCandidate(payload);
-      if (!fileCheck.valid) {
-        sendMessage(chat_id, "❌ Il file JSON non è valido: " + fileCheck.reason + ".");
-        return;
-      }
-
-      var resFile = sendGlando(payload);
-      if (resFile && resFile.ok) {
-        sendMessage(chat_id, "✅ " + (resFile.summary || "Eventi caricati! Controlla Google Calendar e Notion."));
-      } else {
-        sendMessage(chat_id, "❌ Import fallito: " + (resFile && resFile.error ? resFile.error : "errore sconosciuto"));
-      }
+      _handleJsonPayload(chat_id, payload, "file");
     } catch (err) {
       sendMessage(chat_id, "❌ Impossibile leggere il file: " + (err && err.message ? err.message : err));
     }
@@ -79,14 +81,7 @@ function doPost(e) {
   var textCheck = _validateJsonCandidate(text);
 
   if (textCheck.valid) {
-    var res = sendGlando(text);
-
-    if (res && res.ok) {
-      sendMessage(chat_id, "✅ " + (res.summary || "Eventi caricati! Controlla Google Calendar e Notion."));
-    }
-    else {
-      sendMessage(chat_id, "❌ Import fallito: " + (res && res.error ? res.error : "errore sconosciuto"));
-    }
+    _handleJsonPayload(chat_id, text, "text");
     return;
   }
 
