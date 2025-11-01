@@ -40,22 +40,10 @@ function sendPhoto(chat_id, fileId, caption) {
   if (caption) {
     payload.caption = caption;
   }
-
-  try {
-    var response = UrlFetchApp.fetch(telegramUrl + "/sendPhoto", {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-    var bodyText = response.getContentText();
-    if (!bodyText) return false;
-    var body = JSON.parse(bodyText);
-    return !!body.ok;
-  } catch (err) {
-    try { Logger.log("sendPhoto error: " + err); } catch (_) {}
-    return false;
-  }
+  UrlFetchApp.fetch(telegramUrl + "/sendPhoto", {
+    method: "post",
+    payload: payload
+  });
 }
 
 
@@ -89,10 +77,7 @@ function doPost(e) {
   if (photo) {
     var bestSize = photo[photo.length - 1];
     if (bestSize && bestSize.file_id) {
-      var ok = sendPhoto(chat_id, bestSize.file_id, message.caption || "");
-      if (!ok) {
-        sendMessage(chat_id, "❌ Impossibile rinviare la foto ricevuta.");
-      }
+      sendPhoto(chat_id, bestSize.file_id, message.caption || "");
     } else {
       sendMessage(chat_id, "❌ Impossibile rinviare la foto ricevuta.");
     }
@@ -173,6 +158,19 @@ function _extractPhotoCandidate(message) {
   var reply = message.reply_to_message;
   if (reply && Array.isArray(reply.photo) && reply.photo.length) return reply.photo;
   return null;
+}
+
+function fetchTelegramFile(fileId) {
+  var fileResp = UrlFetchApp.fetch(telegramUrl + "/getFile?file_id=" + encodeURIComponent(fileId));
+  var fileData = JSON.parse(fileResp.getContentText());
+  if (!fileData.ok || !(fileData.result && fileData.result.file_path)) {
+    throw new Error("Risposta non valida da Telegram.");
+  }
+
+  var filePath = fileData.result.file_path;
+  var downloadUrl = "https://api.telegram.org/file/bot" + token + "/" + filePath;
+  var contentResp = UrlFetchApp.fetch(downloadUrl);
+  return contentResp.getContentText();
 }
 
 function fetchTelegramFile(fileId) {
