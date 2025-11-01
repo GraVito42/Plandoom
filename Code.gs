@@ -92,21 +92,23 @@ function doPost(e) {
     else {
       sendMessage(chat_id, "❌ Import fallito: " + (res && res.error ? res.error : "errore sconosciuto"));
     }
+    return;
   }
-  else if (typeof text === "string" && text.trim()) {
+
+  if (text === "/start") {
+    var attivazione = "✅ Bot attivato!\n\nInviami un file .json via 📎 oppure incolla il contenuto JSON direttamente nel messaggio.\n\nTi guiderò passo passo per importare eventi in Notion e Google Calendar.";
+    sendMessage(chat_id, attivazione);
+    return;
+  }
+
+  if (typeof text === "string" && text.trim()) {
     sendMessage(chat_id, "❌ Il testo inviato non è un JSON valido: " + textCheck.reason + ".");
+  } else {
+    var risposta = "È l'ora di Plan---do!📒😄   " + (typeof text === "string" ? text : "");
+    sendMessage(chat_id, risposta);
   }
-  else{
-    if (text === "/start") {
-      var attivazione = "✅ Bot attivato!\n\nInviami un file .json via 📎 oppure incolla il contenuto JSON direttamente nel messaggio.\n\nTi guiderò passo passo per importare eventi in Notion e Google Calendar.";
-      sendMessage(chat_id, attivazione);
-    }
-    else{
-      var risposta = "È l'ora di Plan---do!📒😄   " + (typeof text === "string" ? text : "");
-      sendMessage(chat_id, risposta);
-    }
-  }  // Comando /start → disattiva mute e invia messaggio di attivazione
-  
+  // Comando /start → disattiva mute e invia messaggio di attivazione
+
 }
 
 function fetchTelegramFile(fileId) {
