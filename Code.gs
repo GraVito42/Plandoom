@@ -46,6 +46,20 @@ function sendPhoto(chat_id, fileId, caption) {
   });
 }
 
+function sendDocument(chat_id, fileId, caption) {
+  var payload = {
+    chat_id: chat_id,
+    document: fileId
+  };
+  if (caption) {
+    payload.caption = caption;
+  }
+  UrlFetchApp.fetch(telegramUrl + "/sendDocument", {
+    method: "post",
+    payload: payload
+  });
+}
+
 
 function _handleJsonPayload(chatId, payload, source) {
   var check = _validateJsonCandidate(payload);
@@ -87,7 +101,22 @@ function doPost(e) {
   if (document) {
     var fileName = document.file_name || "";
     var mimeType = document.mime_type || "";
-    var looksJson = fileName.toLowerCase().endsWith(".json") || mimeType.indexOf("json") !== -1;
+    var lowerName = fileName.toLowerCase();
+    var isImageDocument = mimeType.indexOf("image/") === 0 ||
+      lowerName.endsWith(".jpg") ||
+      lowerName.endsWith(".jpeg") ||
+      lowerName.endsWith(".png");
+
+    if (isImageDocument) {
+      if (document.file_id) {
+        sendDocument(chat_id, document.file_id, message.caption || "");
+      } else {
+        sendMessage(chat_id, "❌ Impossibile rinviare l'immagine ricevuta.");
+      }
+      return;
+    }
+
+    var looksJson = lowerName.endsWith(".json") || mimeType.indexOf("json") !== -1;
 
     if (!looksJson) {
       sendMessage(chat_id, "❌ Il file deve essere in formato JSON.");
