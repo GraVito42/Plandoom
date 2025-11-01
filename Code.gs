@@ -2,32 +2,87 @@ var token = PropertiesService.getScriptProperties().getProperty('BOT_TOKEN');;
 var telegramUrl = "https://api.telegram.org/bot" + token; 
 var webAppUrl = "https://script.google.com/macros/s/AKfycbylRBQRa_VU-S1iJyRZLzw2BgPDOh51DD8rLYtFJlmXCK3CdEeBqDuzlF77furGfi5b/exec"; 
 
-function isJson(value) {
-  if (value === null || value === undefined) return false;
-  if (typeof value === 'object') return true;
-  if (typeof value === 'string') {
-    var t = value.trim();
-    if (!t) return false;
-    if (!(t.startsWith('{') && t.endsWith('}')) && !(t.startsWith('[') && t.endsWith(']'))) return false;
-    try { JSON.parse(t); return true; } catch (_) { return false; }
+function _validateJsonCandidate(value) {
+  if (value === null || value === undefined) {
+    return { valid: false, reason: "Nessun contenuto" };
   }
-  return false;
-}
+  if (typeof value === "object") {
+    return { valid: true };
+  }
+  if (typeof value !== "string") {
+    return { valid: false, reason: "Formato non supportato" };
+  }
 
+  var t = value.trim();
+  if (!t) {
+    return { valid: false, reason: "Testo vuoto" };
+  }
+
+  try {
+    JSON.parse(t);
+    return { valid: true };
+  } catch (err) {
+    var msg = err && err.message ? err.message : "JSON non valido";
+    return { valid: false, reason: msg };
+  }
+}
 
 function sendMessage(chat_id, text) {
   var url = telegramUrl + "/sendMessage?chat_id=" + chat_id + "&text=" + encodeURIComponent(text);
   var response = UrlFetchApp.fetch(url);
 }
 
+function sendPhoto(chat_id, fileId, caption) {
+  var payload = {
+    chat_id: chat_id,
+    photo: fileId
+  };
+  if (caption) {
+    payload.caption = caption;
+  }
+  UrlFetchApp.fetch(telegramUrl + "/sendPhoto", {
+    method: "post",
+    payload: payload
+  });
+}
+
+
+function _handleJsonPayload(chatId, payload, source) {
+  var check = _validateJsonCandidate(payload);
+  if (!check.valid) {
+    var target = source === "file" ? "Il file JSON" : "Il testo inviato";
+    sendMessage(chatId, "❌ " + target + " non è valido: " + check.reason + ".");
+    return;
+  }
+
+  var res = sendGlando(payload);
+
+  if (res && res.ok) {
+    sendMessage(chatId, "✅ " + (res.summary || "Eventi caricati! Controlla Google Calendar e Notion."));
+  } else {
+    sendMessage(chatId, "❌ Import fallito: " + (res && res.error ? res.error : "errore sconosciuto"));
+  }
+}
+
 
 function doPost(e) {
   var contents = JSON.parse(e.postData.contents);
-  var message = contents.message || contents.edited_message || {};
+  var message = _resolveTelegramMessage(contents);
   var chat = message.chat || {};
   var chat_id = chat.id || (message.from && message.from.id);
-  var text = message.text || "";
-  var document = message.document;
+  var text = _extractTextCandidate(message);
+  var document = _extractDocumentCandidate(message);
+  var photo = _extractPhotoCandidate(message);
+
+  if (photo) {
+    var bestSize = photo[photo.length - 1];
+    if (bestSize && bestSize.file_id) {
+      sendPhoto(chat_id, bestSize.file_id, message.caption || "");
+    } else {
+      sendMessage(chat_id, "❌ Impossibile rinviare la foto ricevuta.");
+    }
+    return;
+  }
 
   if (document) {
     var fileName = document.file_name || "";
@@ -41,44 +96,81 @@ function doPost(e) {
 
     try {
       var payload = fetchTelegramFile(document.file_id);
-      if (!isJson(payload)) {
-        sendMessage(chat_id, "❌ Il file JSON non è valido: controlla il contenuto e riprova.");
-        return;
-      }
-
-      var resFile = sendGlando(payload);
-      if (resFile && resFile.ok) {
-        sendMessage(chat_id, "✅ " + (resFile.summary || "Eventi caricati! Controlla Google Calendar e Notion."));
-      } else {
-        sendMessage(chat_id, "❌ Import fallito: " + (resFile && resFile.error ? resFile.error : "errore sconosciuto"));
-      }
+      _handleJsonPayload(chat_id, payload, "file");
     } catch (err) {
       sendMessage(chat_id, "❌ Impossibile leggere il file: " + (err && err.message ? err.message : err));
     }
     return;
   }
 
-  if (isJson(text)) {
-    var res = sendGlando(text);
+  var textCheck = _validateJsonCandidate(text);
 
-    if (res && res.ok) {
-      sendMessage(chat_id, "✅ " + (res.summary || "Eventi caricati! Controlla Google Calendar e Notion."));
-    }
-    else {
-      sendMessage(chat_id, "❌ Import fallito: " + (res && res.error ? res.error : "errore sconosciuto"));
-    }
+  if (textCheck.valid) {
+    _handleJsonPayload(chat_id, text, "text");
+    return;
   }
-  else{
-    if (text === "/start") {
-      var attivazione = "✅ Bot attivato!\n\nInviami un file .json via 📎 oppure incolla il contenuto JSON direttamente nel messaggio.\n\nTi guiderò passo passo per importare eventi in Notion e Google Calendar.";
-      sendMessage(chat_id, attivazione);
-    }
-    else{
-      var risposta = "È l'ora di Plan---do!📒😄   "+ text;
-      sendMessage(chat_id, risposta);
-    }
-  }  // Comando /start → disattiva mute e invia messaggio di attivazione
-  
+
+  if (text === "/start") {
+    var attivazione = "✅ Bot attivato!\n\nInviami un file .json via 📎 oppure incolla il contenuto JSON direttamente nel messaggio.\n\nTi guiderò passo passo per importare eventi in Notion e Google Calendar.";
+    sendMessage(chat_id, attivazione);
+    return;
+  }
+
+  if (typeof text === "string" && text.trim()) {
+    sendMessage(chat_id, "❌ Il testo inviato non è un JSON valido: " + textCheck.reason + ".");
+  } else {
+    var risposta = "È l'ora di Plan---do!📒😄   " + (typeof text === "string" ? text : "");
+    sendMessage(chat_id, risposta);
+  }
+  // Comando /start → disattiva mute e invia messaggio di attivazione
+
+}
+
+function _resolveTelegramMessage(update) {
+  if (!update || typeof update !== "object") return {};
+  var message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
+  if (message && typeof message === "object") return message;
+  if (update.callback_query && update.callback_query.message) return update.callback_query.message;
+  return {};
+}
+
+function _extractTextCandidate(message) {
+  if (!message || typeof message !== "object") return "";
+  if (typeof message.text === "string") return message.text;
+  if (typeof message.caption === "string") return message.caption;
+  var reply = message.reply_to_message;
+  if (reply && typeof reply.text === "string") return reply.text;
+  if (reply && typeof reply.caption === "string") return reply.caption;
+  return "";
+}
+
+function _extractDocumentCandidate(message) {
+  if (!message || typeof message !== "object") return null;
+  if (message.document) return message.document;
+  var reply = message.reply_to_message;
+  if (reply && reply.document) return reply.document;
+  return null;
+}
+
+function _extractPhotoCandidate(message) {
+  if (!message || typeof message !== "object") return null;
+  if (Array.isArray(message.photo) && message.photo.length) return message.photo;
+  var reply = message.reply_to_message;
+  if (reply && Array.isArray(reply.photo) && reply.photo.length) return reply.photo;
+  return null;
+}
+
+function fetchTelegramFile(fileId) {
+  var fileResp = UrlFetchApp.fetch(telegramUrl + "/getFile?file_id=" + encodeURIComponent(fileId));
+  var fileData = JSON.parse(fileResp.getContentText());
+  if (!fileData.ok || !(fileData.result && fileData.result.file_path)) {
+    throw new Error("Risposta non valida da Telegram.");
+  }
+
+  var filePath = fileData.result.file_path;
+  var downloadUrl = "https://api.telegram.org/file/bot" + token + "/" + filePath;
+  var contentResp = UrlFetchApp.fetch(downloadUrl);
+  return contentResp.getContentText();
 }
 
 function fetchTelegramFile(fileId) {
