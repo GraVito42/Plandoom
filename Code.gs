@@ -173,6 +173,19 @@ function fetchTelegramFile(fileId) {
   return contentResp.getContentText();
 }
 
+function fetchTelegramFile(fileId) {
+  var fileResp = UrlFetchApp.fetch(telegramUrl + "/getFile?file_id=" + encodeURIComponent(fileId));
+  var fileData = JSON.parse(fileResp.getContentText());
+  if (!fileData.ok || !(fileData.result && fileData.result.file_path)) {
+    throw new Error("Risposta non valida da Telegram.");
+  }
+
+  var filePath = fileData.result.file_path;
+  var downloadUrl = "https://api.telegram.org/file/bot" + token + "/" + filePath;
+  var contentResp = UrlFetchApp.fetch(downloadUrl);
+  return contentResp.getContentText();
+}
+
 function setWebhook() {
   const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxab_nYFDG5-gBWZqmSm0zdXgN9uc3X6h7RJZ2Kv8fIG55wVh3xJ8a-CrV-7-cvPpf4/exec';
   const del = `https://api.telegram.org/bot${token}/deleteWebhook`;
