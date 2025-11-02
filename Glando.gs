@@ -260,6 +260,39 @@ function upsert(dic) {
 
     var colorValue = ev.colorId || ev.color_id;
     if (colorValue) {
+      calendarEvent.colorId = String(colorValue);
+    }
+
+    if (ev.location) {
+      calendarEvent.location = ev.location;
+    }
+
+    var insertedEvent = Calendar.Events.insert(calendarEvent, calendarId);
+    ev.calendar_event_id = insertedEvent.id;
+    ev.color_id = colorValue || ev.color_id;
+    var calRes = { eventId: insertedEvent.id, action: "created" };
+
+    // === Notion ===
+    var externalId = ev.external_id || "";
+    var colorText = colorValue ? String(colorValue) : "";
+
+    var props = {
+      "Name":       { "title": [{ "text": { "content": ev.title } }] },
+      "Start":      { "date": { "start": ev.start } },
+      "End":        { "date": { "start": ev.end } },
+      "ExternalID": { "rich_text": externalId ? [{ "text": { "content": externalId } }] : [] },
+      "colorId":    { "rich_text": colorText ? [{ "text": { "content": colorText } }] : [] }
+    };
+
+    var calendarEvent = {
+      summary: ev.title,
+      description: "ExtID:" + (ev.external_id || ""),
+      start: _gl_buildCalendarTime_(startIso),
+      end: _gl_buildCalendarTime_(endIso)
+    };
+
+    var colorValue = ev.colorId || ev.color_id;
+    if (colorValue) {
       colorValue = String(colorValue);
       calendarEvent.colorId = colorValue;
       ev.color_id = colorValue;
@@ -284,11 +317,9 @@ function upsert(dic) {
       }
     }
 
-    results.push({
-      externalId: ev.external_id,
-      calendar: calRes,
-      notion: notionRes ? { pageId: notionRes.id, action: notionRes.action } : null
-    });
+    var notionRes = JSON.parse(resp.getContentText());
+    ev.notion_page_id = notionRes.id;
+    results.push({ externalId: ev.external_id, calendar: calRes, notion: { pageId: notionRes.id, action: "created" } });
   }
   );
   gl_gs_upsert(dic);
@@ -303,59 +334,6 @@ function _gl_buildCalendarTime_(isoString) {
     return { date: isoString.substring(0, 10) };
   }
   return { dateTime: isoString };
-}
-
-function _gl_upsertNotionPage_(ev, token, dbId, colorValue) {
-  var externalId = ev.external_id || "";
-  var colorText = colorValue ? String(colorValue) : "";
-
-  var props = {
-    "Name":       { "title": [{ "text": { "content": ev.title } }] },
-    "Start":      { "date": { "start": ev.start, "end": ev.end || null } },
-    "ExternalID": { "rich_text": externalId ? [{ "text": { "content": externalId } }] : [] },
-    "colorId":    { "rich_text": colorText ? [{ "text": { "content": colorText } }] : [] }
-  };
-
-  if (ev.end) {
-    props["End"] = { "date": { "start": ev.end } };
-  }
-
-  var pageId = ev.notion_page_id || ev.notionPageId;
-  var path = pageId ? "/pages/" + pageId : "/pages";
-  var method = pageId ? "patch" : "post";
-  var body = pageId ? { properties: props } : { parent: { database_id: dbId }, properties: props };
-
-  var response = UrlFetchApp.fetch("https://api.notion.com/v1" + path, {
-    method: method,
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json"
-    },
-    muteHttpExceptions: true,
-    payload: JSON.stringify(body)
-  });
-
-  var status = response.getResponseCode();
-  var text = response.getContentText();
-  if (status === 401) {
-    var unauthorizedMessage = text;
-    try {
-      var unauthorizedParsed = JSON.parse(text);
-      if (unauthorizedParsed && unauthorizedParsed.message) {
-        unauthorizedMessage = unauthorizedParsed.message;
-      }
-    } catch (_) {}
-    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
-  }
-
-  if (status < 200 || status >= 300) {
-    throw new Error("Notion API error (" + status + "): " + text);
-  }
-
-  var parsed = JSON.parse(text);
-  parsed.action = pageId ? "updated" : "created";
-  return parsed;
 }
 
 
