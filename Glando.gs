@@ -284,20 +284,38 @@ function upsert(dic) {
       "colorId":    { "rich_text": colorText ? [{ "text": { "content": colorText } }] : [] }
     };
 
-    var body = {
-      parent: { database_id: dbId },
-      properties: props
+    var calendarEvent = {
+      summary: ev.title,
+      description: "ExtID:" + (ev.external_id || ""),
+      start: _gl_buildCalendarTime_(startIso),
+      end: _gl_buildCalendarTime_(endIso)
     };
 
-    var resp = UrlFetchApp.fetch("https://api.notion.com/v1/pages", {
-      method: "post",
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json"
-      },
-      payload: JSON.stringify(body)
-    });
+    var colorValue = ev.colorId || ev.color_id;
+    if (colorValue) {
+      colorValue = String(colorValue);
+      calendarEvent.colorId = colorValue;
+      ev.color_id = colorValue;
+      ev.colorId = colorValue;
+    }
+
+    if (ev.location) {
+      calendarEvent.location = ev.location;
+    }
+
+    var insertedEvent = Calendar.Events.insert(calendarEvent, calendarId);
+    ev.calendar_event_id = insertedEvent.id;
+    ev.color_id = colorValue || ev.color_id;
+    var calRes = { eventId: insertedEvent.id, action: "created" };
+
+    // === Notion ===
+    var notionRes = null;
+    if (token && dbId) {
+      notionRes = _gl_upsertNotionPage_(ev, token, dbId, colorValue);
+      if (notionRes && notionRes.id) {
+        ev.notion_page_id = notionRes.id;
+      }
+    }
 
     var notionRes = JSON.parse(resp.getContentText());
     ev.notion_page_id = notionRes.id;
