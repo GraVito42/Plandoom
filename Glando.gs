@@ -107,6 +107,12 @@ function gl_gs_upsert(dic) {
   var appends = [];
 
   (dic.events || []).forEach(function(ev) {
+    var sheetColor = "";
+    if (ev.color_id !== undefined && ev.color_id !== null && String(ev.color_id).trim() !== "") {
+      var numericColor = Number(ev.color_id);
+      sheetColor = isNaN(numericColor) ? String(ev.color_id).trim() : numericColor;
+    }
+
     var record = {
       ExternalID: ev.external_id || "",
       Title:      ev.title || "Untitled",
