@@ -99,8 +99,7 @@ function gl_gs_upsert(dic) {
 
   var rowByExt = {};
   for (var r = 0; r < existing.length; r++) {
-    var row = existing[r] || [];
-    var ext = row[idxExternal] || "";
+    var ext = existing[r][idxExternal] || "";
     if (ext) rowByExt[ext] = r + 2; // offset header
   }
 
@@ -240,7 +239,6 @@ function upsert(dic) {
 
   var results = [];
   var notionSchema = null;
-  var notionLookupCache = {};
   if (token && dbId) {
     notionSchema = _gl_getNotionDbSchema_(token, dbId);
   }
@@ -263,16 +261,38 @@ function upsert(dic) {
     ev.start = startIso;
     ev.end = endIso;
 
-    var normalizedColor = _gl_normalizeColorId_(ev.colorId, ev.color_id);
-    if (normalizedColor) {
-      ev.colorId = normalizedColor;
-      ev.color_id = normalizedColor;
+    var calendarEvent = {
+      summary: ev.title,
+      description: "ExtID:" + (ev.external_id || ""),
+      start: _gl_buildCalendarTime_(startIso),
+      end: _gl_buildCalendarTime_(endIso)
+    };
+
+    var colorValue = ev.colorId || ev.color_id;
+    if (colorValue) {
+      calendarEvent.colorId = String(colorValue);
     }
 
-    var remindersInfo = _gl_parseReminders_(ev.reminders);
-    var reminderTexts = remindersInfo.texts || [];
-    var reminderValues = remindersInfo.values || [];
-    ev.reminders = reminderValues;
+    if (ev.location) {
+      calendarEvent.location = ev.location;
+    }
+
+    var insertedEvent = Calendar.Events.insert(calendarEvent, calendarId);
+    ev.calendar_event_id = insertedEvent.id;
+    ev.color_id = colorValue || ev.color_id;
+    var calRes = { eventId: insertedEvent.id, action: "created" };
+
+    // === Notion ===
+    var externalId = ev.external_id || "";
+    var colorText = colorValue ? String(colorValue) : "";
+
+    var props = {
+      "Name":       { "title": [{ "text": { "content": ev.title } }] },
+      "Start":      { "date": { "start": ev.start } },
+      "End":        { "date": { "start": ev.end } },
+      "ExternalID": { "rich_text": externalId ? [{ "text": { "content": externalId } }] : [] },
+      "colorId":    { "rich_text": colorText ? [{ "text": { "content": colorText } }] : [] }
+    };
 
     var calendarEvent = {
       summary: ev.title,
@@ -281,37 +301,35 @@ function upsert(dic) {
       end: _gl_buildCalendarTime_(endIso)
     };
 
-    if (normalizedColor) {
-      calendarEvent.colorId = normalizedColor;
+    var colorValue = ev.colorId || ev.color_id;
+    if (colorValue) {
+      colorValue = String(colorValue);
+      calendarEvent.colorId = colorValue;
+      ev.color_id = colorValue;
+      ev.colorId = colorValue;
     }
 
     if (ev.location) {
       calendarEvent.location = ev.location;
     }
 
-    var calendarReminders = _gl_buildCalendarReminders_(remindersInfo.overrides);
-    if (calendarReminders) {
-      calendarEvent.reminders = calendarReminders;
-    }
-
     var insertedEvent = Calendar.Events.insert(calendarEvent, calendarId);
     ev.calendar_event_id = insertedEvent.id;
+    ev.color_id = colorValue || ev.color_id;
     var calRes = { eventId: insertedEvent.id, action: "created" };
 
     // === Notion ===
     var notionRes = null;
     if (token && dbId) {
-      notionRes = _gl_upsertNotionPage_(ev, token, dbId, normalizedColor, reminderTexts, notionSchema, notionLookupCache);
+      notionRes = _gl_upsertNotionPage_(ev, token, dbId, colorValue);
       if (notionRes && notionRes.id) {
         ev.notion_page_id = notionRes.id;
       }
     }
 
-    results.push({
-      externalId: ev.external_id,
-      calendar: calRes,
-      notion: notionRes ? { pageId: notionRes.id, action: notionRes.action } : null
-    });
+    var notionRes = JSON.parse(resp.getContentText());
+    ev.notion_page_id = notionRes.id;
+    results.push({ externalId: ev.external_id, calendar: calRes, notion: { pageId: notionRes.id, action: "created" } });
   }
   );
   gl_gs_upsert(dic);
@@ -326,454 +344,6 @@ function _gl_buildCalendarTime_(isoString) {
     return { date: isoString.substring(0, 10) };
   }
   return { dateTime: isoString };
-}
-
-function _gl_upsertNotionPage_(ev, token, dbId, colorValue, reminderTexts, notionSchema, notionLookupCache) {
-  var externalId = ev.external_id || "";
-  var colorText = colorValue ? String(colorValue) : "";
-  var remindersArray = Array.isArray(reminderTexts) ? reminderTexts : [];
-
-  var pageId = ev.notion_page_id || ev.notionPageId || "";
-  if (!pageId && externalId) {
-    pageId = _gl_resolveNotionPageIdByExternalId_(token, dbId, notionSchema, externalId, notionLookupCache) || "";
-    if (pageId) {
-      ev.notion_page_id = pageId;
-      ev.notionPageId = pageId;
-    }
-  }
-
-  var nameProperty = _gl_findNotionPropertyInfo_(notionSchema, "Name");
-  var startProperty = _gl_findNotionPropertyInfo_(notionSchema, "Start");
-  var endProperty = _gl_findNotionPropertyInfo_(notionSchema, "End");
-  var externalProperty = _gl_findNotionPropertyInfo_(notionSchema, "ExternalID");
-
-  var props = {};
-  var nameKey = nameProperty ? nameProperty.name : "Name";
-  props[nameKey] = { "title": _gl_makeRichTextArray_(ev.title) };
-
-  var startKey = startProperty ? startProperty.name : "Start";
-  props[startKey] = { "date": { "start": ev.start, "end": ev.end || null } };
-
-  var externalKey = externalProperty ? externalProperty.name : "ExternalID";
-  props[externalKey] = { "rich_text": externalId ? _gl_makeRichTextArray_(externalId) : [] };
-
-  if (ev.end) {
-    var endKey = endProperty ? endProperty.name : "End";
-    props[endKey] = { "date": { "start": ev.end } };
-  }
-
-  var path = pageId ? "/pages/" + pageId : "/pages";
-  var method = pageId ? "patch" : "post";
-  var body = pageId ? { properties: props } : { parent: { database_id: dbId }, properties: props };
-
-  _gl_assignColorProperty_(props, notionSchema, colorText);
-  _gl_assignRemindersProperty_(props, notionSchema, remindersArray);
-
-  // Manteniamo il nome `resp` usato storicamente per evitare ReferenceError
-  // in altri file che potrebbero loggare questa variabile globale.
-  resp = UrlFetchApp.fetch("https://api.notion.com/v1" + path, {
-    method: method,
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json"
-    },
-    muteHttpExceptions: true,
-    payload: JSON.stringify(body)
-  });
-
-  var notionResp = resp;
-
-  var status = notionResp.getResponseCode();
-  var text = notionResp.getContentText();
-  if (status === 401) {
-    var unauthorizedMessage = text;
-    try {
-      var unauthorizedParsed = JSON.parse(text);
-      if (unauthorizedParsed && unauthorizedParsed.message) {
-        unauthorizedMessage = unauthorizedParsed.message;
-      }
-    } catch (_) {}
-    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
-  }
-
-  if (status < 200 || status >= 300) {
-    throw new Error("Notion API error (" + status + "): " + text);
-  }
-
-  var parsed = JSON.parse(text);
-  parsed.action = pageId ? "updated" : "created";
-  return parsed;
-}
-
-var _gl_cachedNotionSchemas_ = {};
-
-function _gl_getNotionDbSchema_(token, dbId) {
-  if (_gl_cachedNotionSchemas_[dbId]) {
-    return _gl_cachedNotionSchemas_[dbId];
-  }
-
-  // Idem come sopra: `resp` resta la variabile principale per compatibilità.
-  resp = UrlFetchApp.fetch("https://api.notion.com/v1/databases/" + dbId, {
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Notion-Version": "2022-06-28"
-    },
-    muteHttpExceptions: true
-  });
-
-  var notionResp = resp;
-
-  var status = notionResp.getResponseCode();
-  var text = notionResp.getContentText();
-  if (status === 401) {
-    var unauthorizedMessage = text;
-    try {
-      var unauthorizedParsed = JSON.parse(text);
-      if (unauthorizedParsed && unauthorizedParsed.message) {
-        unauthorizedMessage = unauthorizedParsed.message;
-      }
-    } catch (_) {}
-    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
-  }
-
-  if (status < 200 || status >= 300) {
-    throw new Error("Notion API error (" + status + "): " + text);
-  }
-
-  var parsed = JSON.parse(text);
-  _gl_cachedNotionSchemas_[dbId] = parsed;
-  return parsed;
-}
-
-function _gl_normalizePropertyName_(name) {
-  return String(name || "")
-    .toLowerCase()
-    .replace(/[\s_\-]+/g, "");
-}
-
-function _gl_findNotionPropertyInfo_(schema, targetName) {
-  if (!schema || !schema.properties) return null;
-  if (schema.properties[targetName]) {
-    return { name: targetName, definition: schema.properties[targetName] };
-  }
-
-  var lowerTarget = String(targetName).toLowerCase();
-  var normalizedTarget = _gl_normalizePropertyName_(targetName);
-
-  for (var key in schema.properties) {
-    if (!schema.properties.hasOwnProperty(key)) continue;
-    var def = schema.properties[key];
-    if (String(key).toLowerCase() === lowerTarget) {
-      return { name: key, definition: def };
-    }
-    if (_gl_normalizePropertyName_(key) === normalizedTarget) {
-      return { name: key, definition: def };
-    }
-  }
-  return null;
-}
-
-function _gl_makeRichTextArray_(value) {
-  var text = String(value || "");
-  if (!text) return [];
-  return [{ text: { content: text } }];
-}
-
-function _gl_assignColorProperty_(props, schema, colorValue) {
-  var info = _gl_findNotionPropertyInfo_(schema, "colorId");
-  var key = info ? info.name : "colorId";
-  var def = info ? info.definition : null;
-  var hasValue = colorValue !== null && colorValue !== undefined && String(colorValue).trim() !== "";
-  var stringValue = hasValue ? String(colorValue).trim() : "";
-
-  if (def && def.type === "number") {
-    var num = hasValue ? Number(stringValue) : null;
-    if (hasValue && isNaN(num)) {
-      num = null;
-    }
-    props[key] = { number: num };
-    return;
-  }
-
-  if (def && def.type === "select") {
-    props[key] = hasValue ? { select: { name: stringValue } } : { select: null };
-    return;
-  }
-
-  if (def && def.type === "multi_select") {
-    props[key] = hasValue ? { multi_select: [{ name: stringValue }] } : { multi_select: [] };
-    return;
-  }
-
-  props[key] = hasValue ? { rich_text: _gl_makeRichTextArray_(stringValue) } : { rich_text: [] };
-}
-
-function _gl_assignRemindersProperty_(props, schema, reminders) {
-  var info = _gl_findNotionPropertyInfo_(schema, "reminders");
-  var key = info ? info.name : "reminders";
-  var def = info ? info.definition : null;
-  var values = Array.isArray(reminders) ? reminders.filter(function(item){
-    return item !== null && item !== undefined && String(item).trim() !== "";
-  }) : [];
-
-  if (def && def.type === "multi_select") {
-    props[key] = { multi_select: values.map(function(val){ return { name: String(val) }; }) };
-    return;
-  }
-
-  if (def && def.type === "select") {
-    var first = values.length ? String(values[0]) : "";
-    props[key] = first ? { select: { name: first } } : { select: null };
-    return;
-  }
-
-  if (def && def.type === "number") {
-    if (values.length) {
-      var candidate = Number(values[0]);
-      props[key] = { number: isNaN(candidate) ? null : candidate };
-    } else {
-      props[key] = { number: null };
-    }
-    return;
-  }
-
-  props[key] = values.length ? { rich_text: _gl_makeRichTextArray_(values.join(", ")) } : { rich_text: [] };
-}
-
-function _gl_resolveNotionPageIdByExternalId_(token, dbId, schema, externalId, cache) {
-  if (!externalId) return "";
-
-  var cacheKey = String(externalId);
-  if (cache && Object.prototype.hasOwnProperty.call(cache, cacheKey)) {
-    return cache[cacheKey] || "";
-  }
-
-  var filter = _gl_buildNotionFilterForExternalId_(schema, externalId);
-  if (!filter) {
-    if (cache) cache[cacheKey] = "";
-    return "";
-  }
-
-  // Conserviamo `resp` per compatibilità con eventuali log esterni.
-  resp = UrlFetchApp.fetch("https://api.notion.com/v1/databases/" + dbId + "/query", {
-    method: "post",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json"
-    },
-    muteHttpExceptions: true,
-    payload: JSON.stringify({ filter: filter, page_size: 1 })
-  });
-
-  var notionResp = resp;
-
-  var status = notionResp.getResponseCode();
-  var text = notionResp.getContentText();
-  if (status === 401) {
-    var unauthorizedMessage = text;
-    try {
-      var unauthorizedParsed = JSON.parse(text);
-      if (unauthorizedParsed && unauthorizedParsed.message) {
-        unauthorizedMessage = unauthorizedParsed.message;
-      }
-    } catch (_) {}
-    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
-  }
-
-  if (status < 200 || status >= 300) {
-    throw new Error("Notion API error (" + status + "): " + text);
-  }
-
-  var parsed = JSON.parse(text);
-  var results = parsed && parsed.results ? parsed.results : [];
-  var pageId = (results && results.length) ? (results[0].id || "") : "";
-
-  if (cache) {
-    cache[cacheKey] = pageId || "";
-  }
-
-  return pageId || "";
-}
-
-function _gl_buildNotionFilterForExternalId_(schema, externalId) {
-  var trimmed = String(externalId || "").trim();
-  if (!trimmed) return null;
-
-  var info = _gl_findNotionPropertyInfo_(schema, "ExternalID");
-  var key = info ? info.name : "ExternalID";
-  var def = info ? info.definition : null;
-  var type = def && def.type ? def.type : "rich_text";
-
-  if (type === "title") {
-    return { property: key, title: { equals: trimmed } };
-  }
-
-  if (type === "rich_text") {
-    return { property: key, rich_text: { equals: trimmed } };
-  }
-
-  if (type === "number") {
-    var numeric = Number(trimmed);
-    if (isNaN(numeric)) return null;
-    return { property: key, number: { equals: numeric } };
-  }
-
-  if (type === "select") {
-    return { property: key, select: { equals: trimmed } };
-  }
-
-  if (type === "multi_select") {
-    return { property: key, multi_select: { contains: trimmed } };
-  }
-
-  if (type === "unique_id") {
-    var uniqueNumeric = Number(trimmed);
-    if (isNaN(uniqueNumeric)) return null;
-    return { property: key, unique_id: { equals: uniqueNumeric } };
-  }
-
-  if (type === "url") {
-    return { property: key, url: { equals: trimmed } };
-  }
-
-  if (type === "email") {
-    return { property: key, email: { equals: trimmed } };
-  }
-
-  return { property: key, rich_text: { equals: trimmed } };
-}
-
-function _gl_normalizeColorId_(primaryValue, fallbackValue) {
-  var value = primaryValue;
-  if (value === null || value === undefined || String(value).trim() === "") {
-    value = fallbackValue;
-  }
-  if (value === null || value === undefined) return "";
-  var stringValue = String(value).trim();
-  if (!stringValue) return "";
-  if (!isNaN(Number(stringValue))) {
-    var numeric = Number(stringValue);
-    if (!isNaN(numeric)) {
-      return String(Math.floor(numeric));
-    }
-  }
-  return stringValue;
-}
-
-function _gl_parseReminders_(input) {
-  var rawItems = [];
-  if (Array.isArray(input)) {
-    rawItems = input;
-  } else if (input !== undefined && input !== null) {
-    if (typeof input === "string") {
-      var trimmed = input.trim();
-      if (trimmed) {
-        if (trimmed[0] === "[" && trimmed[trimmed.length - 1] === "]") {
-          try {
-            var parsed = JSON.parse(trimmed);
-            if (Array.isArray(parsed)) {
-              rawItems = parsed;
-            } else {
-              rawItems = [trimmed];
-            }
-          } catch (_) {
-            rawItems = [trimmed];
-          }
-        } else if (trimmed.indexOf(",") > -1) {
-          rawItems = trimmed.split(",");
-        } else {
-          rawItems = [trimmed];
-        }
-      }
-    } else {
-      rawItems = [input];
-    }
-  }
-
-  var overrides = [];
-  var texts = [];
-  var values = [];
-
-  rawItems.forEach(function(item) {
-    if (item === null || item === undefined) return;
-
-    var method = "popup";
-    var minutes = null;
-    var textValue = "";
-    var storedValue = null;
-
-    if (typeof item === "number") {
-      if (!isNaN(item)) {
-        minutes = Math.max(0, Math.round(item));
-        textValue = String(minutes);
-        storedValue = minutes;
-      }
-    } else if (typeof item === "string") {
-      var trimmed = item.trim();
-      if (!trimmed) return;
-      textValue = trimmed;
-
-      var colon = trimmed.indexOf(":");
-      if (colon > -1) {
-        var methodPart = trimmed.substring(0, colon).trim().toLowerCase();
-        var valuePart = trimmed.substring(colon + 1).trim();
-        var parsedMinutes = parseInt(valuePart, 10);
-        if (!isNaN(parsedMinutes)) {
-          minutes = Math.max(0, parsedMinutes);
-          if (methodPart === "email" || methodPart === "popup") {
-            method = methodPart;
-          }
-        }
-        storedValue = trimmed;
-      }
-
-      if (minutes === null) {
-        var numeric = parseInt(trimmed, 10);
-        if (!isNaN(numeric)) {
-          minutes = Math.max(0, numeric);
-          storedValue = minutes;
-        }
-      }
-
-      if (storedValue === null) {
-        storedValue = trimmed;
-      }
-    } else if (typeof item === "object") {
-      var objMethod = item.method ? String(item.method).toLowerCase() : "popup";
-      var objMinutes = item.minutes;
-      if (typeof objMinutes === "number" && !isNaN(objMinutes)) {
-        minutes = Math.max(0, Math.round(objMinutes));
-        if (objMethod === "email" || objMethod === "popup") {
-          method = objMethod;
-        }
-        textValue = objMethod + ":" + minutes;
-        storedValue = textValue;
-      }
-    }
-
-    if (textValue) {
-      texts.push(textValue);
-    }
-
-    if (storedValue !== null) {
-      values.push(storedValue);
-    } else if (textValue) {
-      values.push(textValue);
-    }
-
-    if (minutes !== null) {
-      overrides.push({ method: method, minutes: minutes });
-    }
-  });
-
-  return { overrides: overrides, texts: texts, values: values };
-}
-
-function _gl_buildCalendarReminders_(overrides) {
-  if (!overrides || !overrides.length) return null;
-  return { useDefault: false, overrides: overrides };
 }
 
 
