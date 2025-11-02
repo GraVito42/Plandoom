@@ -73,6 +73,20 @@ function _sendTelegramFile(chat_id, fileId, caption, method, field) {
   }
 }
 
+function sendDocument(chat_id, fileId, caption) {
+  var payload = {
+    chat_id: chat_id,
+    document: fileId
+  };
+  if (caption) {
+    payload.caption = caption;
+  }
+  UrlFetchApp.fetch(telegramUrl + "/sendDocument", {
+    method: "post",
+    payload: payload
+  });
+}
+
 
 function _handleJsonPayload(chatId, payload, source) {
   var check = _validateJsonCandidate(payload);
@@ -126,11 +140,7 @@ function doPost(e) {
 
     if (isImageDocument) {
       if (document.file_id) {
-        try {
-          sendDocument(chat_id, document.file_id, message.caption || "");
-        } catch (err) {
-          sendMessage(chat_id, "❌ Impossibile rinviare l'immagine ricevuta: " + (err && err.message ? err.message : err));
-        }
+        sendDocument(chat_id, document.file_id, message.caption || "");
       } else {
         sendMessage(chat_id, "❌ Impossibile rinviare l'immagine ricevuta.");
       }
