@@ -116,6 +116,7 @@ function gl_gs_upsert(dic) {
       CalendarEventId: ev.calendar_event_id || "",
       NotionPageId:    ev.notion_page_id || "",
       ColorId:         ev.color_id || ev.colorId || "",
+      Reminders:       (ev.reminders && ev.reminders.length) ? JSON.stringify(ev.reminders) : "",
       LastSynced:      new Date().toISOString()
     };
 
@@ -189,7 +190,7 @@ function _gs_ensureHeaders_(spreadsheetId, sheetName, sheetId) {
   var headers = [
     "ExternalID","Title","Start","End","Due","Location",
     "Status","Kind","Scope","Source",
-    "CalendarEventId","NotionPageId","ColorId","LastSynced"
+    "CalendarEventId","NotionPageId","ColorId","Reminders","LastSynced"
   ];
 
   var desiredRange = sheetName + "!1:1";
@@ -232,6 +233,10 @@ function upsert(dic) {
   var calendarId = p.getProperty("GLANDO_CALENDAR_ID") || "primary";
 
   var results = [];
+  var notionSchema = null;
+  if (token && dbId) {
+    notionSchema = _gl_getNotionDbSchema_(token, dbId);
+  }
 
   dic.events.forEach(function(ev) {
     // === Calendar (Google Calendar API) ===
