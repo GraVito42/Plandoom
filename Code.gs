@@ -28,22 +28,49 @@ function _validateJsonCandidate(value) {
 }
 
 function sendMessage(chat_id, text) {
-  var url = telegramUrl + "/sendMessage?chat_id=" + chat_id + "&text=" + encodeURIComponent(text);
+  var url = telegramUrl + "/sendMessage?chat_id=" + encodeURIComponent(String(chat_id)) + "&text=" + encodeURIComponent(text);
   var response = UrlFetchApp.fetch(url);
 }
 
 function sendPhoto(chat_id, fileId, caption) {
+  _sendTelegramFile(chat_id, fileId, caption, "sendPhoto", "photo");
+}
+
+function sendDocument(chat_id, fileId, caption) {
+  _sendTelegramFile(chat_id, fileId, caption, "sendDocument", "document");
+}
+
+function _sendTelegramFile(chat_id, fileId, caption, method, field) {
+  if (!chat_id || !fileId) {
+    throw new Error("Parametri non validi per l'invio del file");
+  }
+
   var payload = {
-    chat_id: chat_id,
-    photo: fileId
+    chat_id: String(chat_id)
   };
+  payload[field] = fileId;
   if (caption) {
     payload.caption = caption;
   }
-  UrlFetchApp.fetch(telegramUrl + "/sendPhoto", {
+
+  var response = UrlFetchApp.fetch(telegramUrl + "/" + method, {
     method: "post",
-    payload: payload
+    payload: payload,
+    muteHttpExceptions: true
   });
+
+  var raw = response.getContentText();
+  try {
+    var parsed = JSON.parse(raw);
+    if (!parsed.ok) {
+      throw new Error(parsed.description || "Richiesta rifiutata da Telegram");
+    }
+  } catch (err) {
+    if (err && err.message && err.message.indexOf("Richiesta rifiutata da Telegram") === 0) {
+      throw err;
+    }
+    throw new Error("Risposta non valida da Telegram: " + raw);
+  }
 }
 
 function sendDocument(chat_id, fileId, caption) {
@@ -91,7 +118,11 @@ function doPost(e) {
   if (photo) {
     var bestSize = photo[photo.length - 1];
     if (bestSize && bestSize.file_id) {
-      sendPhoto(chat_id, bestSize.file_id, message.caption || "");
+      try {
+        sendPhoto(chat_id, bestSize.file_id, message.caption || "");
+      } catch (err) {
+        sendMessage(chat_id, "❌ Impossibile rinviare la foto ricevuta: " + (err && err.message ? err.message : err));
+      }
     } else {
       sendMessage(chat_id, "❌ Impossibile rinviare la foto ricevuta.");
     }
