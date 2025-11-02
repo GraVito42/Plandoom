@@ -9,6 +9,11 @@ function sendGlando(dic_raw) {
     return { ok: false, error: err };
   }
 }
+
+// Variabile globale mantenuta per compatibilità con script esterni che
+// leggono l'ultimo `resp` della comunicazione con le API Notion.
+var resp;
+
 function _sg_normalize(input) {
   var obj = input;
 
