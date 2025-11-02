@@ -80,23 +80,26 @@ function gl_gs_upsert(dic) {
   var sname = p.getProperty("GLANDO_SHEET_NAME") || "Glando";
   if (!sid) throw new Error("GLANDO_SHEET_ID non configurato.");
 
-  var sh = _gs_getSheet_(sid, sname);
-  _gs_ensureHeaders_(sh);
+  var sheetMeta = _gs_getSheetMetadata_(sid, sname);
+  var sheetId = sheetMeta.sheetId;
 
-  var headers = _gs_readHeaders_(sh);                 // array di header
-  var idxExternal = headers.indexOf("ExternalID");    // 0-based
+  var headers = _gs_ensureHeaders_(sid, sname, sheetId);
+  var idxExternal = headers.indexOf("ExternalID");
   if (idxExternal < 0) throw new Error("Header 'ExternalID' mancante.");
 
-  var rows = Math.max(sh.getLastRow() - 1, 0);
-  var cols = headers.length;
-  var existing = rows ? sh.getRange(2, 1, rows, cols).getValues() : [];
+  var colLetter = _gs_columnLetter_(headers.length);
+  var dataRange = sname + "!A2:" + colLetter;
+  var dataResp = Sheets.Spreadsheets.Values.get(sid, dataRange);
+  var existing = dataResp.values || [];
 
-  // Mappa ExternalID -> rowIndex (in foglio, 1-based)
   var rowByExt = {};
   for (var r = 0; r < existing.length; r++) {
     var ext = existing[r][idxExternal] || "";
-    if (ext) rowByExt[ext] = r + 2; // riga del foglio (2 = prima riga dopo header)
+    if (ext) rowByExt[ext] = r + 2; // offset header
   }
+
+  var updates = [];
+  var appends = [];
 
   (dic.events || []).forEach(function(ev) {
     var record = {
@@ -112,103 +115,247 @@ function gl_gs_upsert(dic) {
       Source:     ev.source || "Calendar",
       CalendarEventId: ev.calendar_event_id || "",
       NotionPageId:    ev.notion_page_id || "",
+      ColorId:         ev.color_id || ev.colorId || "",
       LastSynced:      new Date().toISOString()
     };
 
-    // crea la riga seguendo l'ordine degli header
     var row = headers.map(function(h){ return (h in record) ? record[h] : ""; });
 
     var ext = record.ExternalID;
     var rowIndex = ext && rowByExt[ext] ? rowByExt[ext] : null;
     if (rowIndex) {
-      sh.getRange(rowIndex, 1, 1, cols).setValues([row]);   // UPDATE
+      updates.push({
+        range: sname + "!A" + rowIndex + ":" + colLetter + rowIndex,
+        values: row
+      });
     } else {
-      sh.appendRow(row);                                     // INSERT
-      var newRow = sh.getLastRow();
-      if (ext) rowByExt[ext] = newRow;
+      appends.push(row);
+      if (ext) {
+        var newRowIndex = existing.length + appends.length + 1; // 1 for header, existing offset
+        rowByExt[ext] = newRowIndex;
+      }
     }
   });
+
+  updates.forEach(function(update) {
+    Sheets.Spreadsheets.Values.update({ values: [update.values] }, sid, update.range, {
+      valueInputOption: "RAW"
+    });
+  });
+
+  if (appends.length) {
+    Sheets.Spreadsheets.Values.append({ values: appends }, sid, sname + "!A1", {
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS"
+    });
+  }
 
   return { ok: true };
 }
 
-function _gs_getSheet_(spreadsheetId, sheetName) {
-  var ss = SpreadsheetApp.openById(spreadsheetId);
-  return ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+function _gs_getSheetMetadata_(spreadsheetId, sheetName) {
+  var spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+  var sheet = null;
+  if (spreadsheet.sheets) {
+    for (var i = 0; i < spreadsheet.sheets.length; i++) {
+      var candidate = spreadsheet.sheets[i];
+      if (candidate && candidate.properties && candidate.properties.title === sheetName) {
+        sheet = candidate.properties;
+        break;
+      }
+    }
+  }
+
+  if (!sheet) {
+    Sheets.Spreadsheets.batchUpdate({
+      requests: [{ addSheet: { properties: { title: sheetName } } }]
+    }, spreadsheetId);
+    var refreshed = Sheets.Spreadsheets.get(spreadsheetId);
+    for (var j = 0; j < refreshed.sheets.length; j++) {
+      var props = refreshed.sheets[j].properties;
+      if (props && props.title === sheetName) {
+        sheet = props;
+        break;
+      }
+    }
+  }
+
+  if (!sheet) throw new Error("Impossibile ottenere il foglio '" + sheetName + "'.");
+
+  return sheet;
 }
 
-function _gs_ensureHeaders_(sh) {
+function _gs_ensureHeaders_(spreadsheetId, sheetName, sheetId) {
   var headers = [
     "ExternalID","Title","Start","End","Due","Location",
     "Status","Kind","Scope","Source",
-    "CalendarEventId","NotionPageId","LastSynced"
+    "CalendarEventId","NotionPageId","ColorId","LastSynced"
   ];
-  var width = headers.length;
 
-  if (sh.getLastRow() === 0) {
-    sh.getRange(1,1,1,width).setValues([headers]);
-    sh.setFrozenRows(1);
-    return;
-  }
-  var current = sh.getRange(1,1,1,Math.max(sh.getLastColumn(), width)).getValues()[0];
-  var equal = headers.length === current.length && headers.every(function(h,i){ return current[i]===h; });
+  var desiredRange = sheetName + "!1:1";
+  var current = Sheets.Spreadsheets.Values.get(spreadsheetId, desiredRange).values;
+  var currentRow = current && current.length ? current[0] : [];
+  var equal = currentRow.length === headers.length && headers.every(function(h, i){ return currentRow[i] === h; });
+
   if (!equal) {
-    sh.clear();
-    sh.getRange(1,1,1,width).setValues([headers]);
-    sh.setFrozenRows(1);
+    Sheets.Spreadsheets.Values.update({ values: [headers] }, spreadsheetId, desiredRange, {
+      valueInputOption: "RAW"
+    });
+    Sheets.Spreadsheets.batchUpdate({
+      requests: [{
+        updateSheetProperties: {
+          properties: { sheetId: sheetId, gridProperties: { frozenRowCount: 1 } },
+          fields: "gridProperties.frozenRowCount"
+        }
+      }]
+    }, spreadsheetId);
   }
+
+  return headers;
 }
 
-function _gs_readHeaders_(sh) {
-  var lastCol = sh.getLastColumn();
-  return lastCol ? sh.getRange(1,1,1,lastCol).getValues()[0] : [];
+function _gs_columnLetter_(index) {
+  var letters = "";
+  var n = index;
+  while (n > 0) {
+    var remainder = (n - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters || "A";
 }
 
 function upsert(dic) {
   var p = PropertiesService.getScriptProperties();
   var token = p.getProperty("NOTION_TOKEN");
   var dbId  = p.getProperty("NOTION_DB_ID");
-  var cal   = CalendarApp.getDefaultCalendar();
+  var calendarId = p.getProperty("GLANDO_CALENDAR_ID") || "primary";
 
   var results = [];
 
   dic.events.forEach(function(ev) {
-    // === Calendar ===
-    var start = new Date(ev.start);
-    var end   = new Date(ev.end || start.getTime() + 30*60000);
-    var calEv = cal.createEvent(ev.title, start, end, { description: "ExtID:" + ev.external_id });
-    var calRes = { eventId: calEv.getId(), action: "created" };
+    // === Calendar (Google Calendar API) ===
+    var startIso = ev.start || ev.due;
+    if (!startIso) throw new Error("Evento privo di data di inizio o scadenza.");
+
+    var endIso = ev.end;
+    if (!endIso) {
+      var startDate = new Date(startIso);
+      if (isNaN(startDate.getTime())) {
+        throw new Error("Data di inizio non valida per l'evento '" + ev.title + "'.");
+      }
+      var defaultEnd = new Date(startDate.getTime() + 30 * 60000);
+      endIso = defaultEnd.toISOString();
+    }
+
+    ev.start = startIso;
+    ev.end = endIso;
+
+    var calendarEvent = {
+      summary: ev.title,
+      description: "ExtID:" + (ev.external_id || ""),
+      start: _gl_buildCalendarTime_(startIso),
+      end: _gl_buildCalendarTime_(endIso)
+    };
+
+    var colorValue = ev.colorId || ev.color_id;
+    if (colorValue) {
+      colorValue = String(colorValue);
+      calendarEvent.colorId = colorValue;
+      ev.color_id = colorValue;
+      ev.colorId = colorValue;
+    }
+
+    if (ev.location) {
+      calendarEvent.location = ev.location;
+    }
+
+    var insertedEvent = Calendar.Events.insert(calendarEvent, calendarId);
+    ev.calendar_event_id = insertedEvent.id;
+    ev.color_id = colorValue || ev.color_id;
+    var calRes = { eventId: insertedEvent.id, action: "created" };
 
     // === Notion ===
-    var props = {
-      "Name":       { "title": [{ "text": { "content": ev.title } }] },
-      "Start":      { "date": { "start": ev.start } },
-      "End":        { "date": { "start": ev.end } },
-      "ExternalID": { "rich_text": [{ "text": { "content": ev.external_id } }] }
-    };
+    var notionRes = null;
+    if (token && dbId) {
+      notionRes = _gl_upsertNotionPage_(ev, token, dbId, colorValue);
+      if (notionRes && notionRes.id) {
+        ev.notion_page_id = notionRes.id;
+      }
+    }
 
-    var body = {
-      parent: { database_id: dbId },
-      properties: props
-    };
-
-    var resp = UrlFetchApp.fetch("https://api.notion.com/v1/pages", {
-      method: "post",
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json"
-      },
-      payload: JSON.stringify(body)
+    results.push({
+      externalId: ev.external_id,
+      calendar: calRes,
+      notion: notionRes ? { pageId: notionRes.id, action: notionRes.action } : null
     });
-
-    var notionRes = JSON.parse(resp.getContentText());
-    results.push({ externalId: ev.external_id, calendar: calRes, notion: { pageId: notionRes.id, action: "created" } });
   }
   );
   gl_gs_upsert(dic);
 
   return { ok: true, results: results };
+}
+
+function _gl_buildCalendarTime_(isoString) {
+  if (!isoString) return null;
+  var isDateOnly = isoString.length <= 10 || (isoString.indexOf("T") === -1);
+  if (isDateOnly) {
+    return { date: isoString.substring(0, 10) };
+  }
+  return { dateTime: isoString };
+}
+
+function _gl_upsertNotionPage_(ev, token, dbId, colorValue) {
+  var externalId = ev.external_id || "";
+  var colorText = colorValue ? String(colorValue) : "";
+
+  var props = {
+    "Name":       { "title": [{ "text": { "content": ev.title } }] },
+    "Start":      { "date": { "start": ev.start, "end": ev.end || null } },
+    "ExternalID": { "rich_text": externalId ? [{ "text": { "content": externalId } }] : [] },
+    "colorId":    { "rich_text": colorText ? [{ "text": { "content": colorText } }] : [] }
+  };
+
+  if (ev.end) {
+    props["End"] = { "date": { "start": ev.end } };
+  }
+
+  var pageId = ev.notion_page_id || ev.notionPageId;
+  var path = pageId ? "/pages/" + pageId : "/pages";
+  var method = pageId ? "patch" : "post";
+  var body = pageId ? { properties: props } : { parent: { database_id: dbId }, properties: props };
+
+  var response = UrlFetchApp.fetch("https://api.notion.com/v1" + path, {
+    method: method,
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Notion-Version": "2022-06-28",
+      "Content-Type": "application/json"
+    },
+    muteHttpExceptions: true,
+    payload: JSON.stringify(body)
+  });
+
+  var status = response.getResponseCode();
+  var text = response.getContentText();
+  if (status === 401) {
+    var unauthorizedMessage = text;
+    try {
+      var unauthorizedParsed = JSON.parse(text);
+      if (unauthorizedParsed && unauthorizedParsed.message) {
+        unauthorizedMessage = unauthorizedParsed.message;
+      }
+    } catch (_) {}
+    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
+  }
+
+  if (status < 200 || status >= 300) {
+    throw new Error("Notion API error (" + status + "): " + text);
+  }
+
+  var parsed = JSON.parse(text);
+  parsed.action = pageId ? "updated" : "created";
+  return parsed;
 }
 
 
