@@ -119,12 +119,17 @@ function doPost(e) {
     var bestSize = photo[photo.length - 1];
     if (bestSize && bestSize.file_id) {
       try {
-        sendPhoto(chat_id, bestSize.file_id, message.caption || "");
+        var ocrResult = sendSeendo(bestSize);
+        if (ocrResult && typeof ocrResult === "string") {
+          sendMessage(chat_id, ocrResult);
+        } else {
+          sendMessage(chat_id, "❌ L'OCR non ha restituito un risultato valido.");
+        }
       } catch (err) {
-        sendMessage(chat_id, "❌ Impossibile rinviare la foto ricevuta: " + (err && err.message ? err.message : err));
+        sendMessage(chat_id, "❌ Impossibile elaborare la foto ricevuta: " + (err && err.message ? err.message : err));
       }
     } else {
-      sendMessage(chat_id, "❌ Impossibile rinviare la foto ricevuta.");
+      sendMessage(chat_id, "❌ Impossibile elaborare la foto ricevuta.");
     }
     return;
   }
