@@ -40,24 +40,13 @@ function sendSeendo(file_photo) {
   var payload = {
     model: 'gpt-4o-mini',
     temperature: 0,
-    response_format: { type: 'json_object' },
     messages: [
-      {
-        role: 'system',
-        content: [
-          { type: 'text', text: systemPrompt }
-        ]
-      },
+      { role: 'system', content: systemPrompt },
       {
         role: 'user',
         content: [
-          { type: 'text', text: userPrompt },
-          {
-            type: 'image_url',
-            image_url: {
-              url: dataUrl
-            }
-          }
+          { type: 'input_text', text: userPrompt },
+          { type: 'input_image', image_url: dataUrl }
         ]
       }
     ]
