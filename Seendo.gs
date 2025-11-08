@@ -46,7 +46,12 @@ function sendSeendo(file_photo) {
         role: 'user',
         content: [
           { type: 'input_text', text: userPrompt },
-          { type: 'input_image', image_url: dataUrl }
+          {
+            type: 'input_image',
+            image_url: {
+              url: dataUrl
+            }
+          }
         ]
       }
     ]
@@ -111,4 +116,68 @@ function _downloadTelegramPhotoAsBase64(fileId) {
     base64: Utilities.base64Encode(blob.getBytes()),
     mimeType: blob.getContentType()
   };
+}
+
+function sendSeendo_check() {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY non configurata nelle proprietà dello script.");
+  }
+
+  var payload = {
+    model: 'gpt-4o-mini',
+    temperature: 0,
+    messages: [
+      { role: 'system', content: 'Sei un assistente di diagnostica.' },
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Rispondi con la stringa "ok".' }
+        ]
+      }
+    ]
+  };
+
+  var response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + apiKey
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  var responseText = response.getContentText();
+  var statusCode = response.getResponseCode();
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new Error("OpenAI ha risposto con stato " + statusCode + ": " + responseText);
+  }
+
+  var data;
+  try {
+    data = JSON.parse(responseText);
+  } catch (err) {
+    throw new Error("Risposta OpenAI non valida: " + responseText);
+  }
+
+  if (!data.choices || !data.choices.length || !data.choices[0].message) {
+    throw new Error("Risposta OpenAI senza contenuto utile.");
+  }
+
+  var content = data.choices[0].message.content;
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    var parts = content.map(function(item) {
+      return typeof item === 'string' ? item : (item && item.text ? item.text : '');
+    }).join('').trim();
+    if (parts) {
+      return parts;
+    }
+  }
+
+  throw new Error("Impossibile interpretare la risposta OpenAI.");
 }
