@@ -45,9 +45,9 @@ function sendSeendo(file_photo) {
       {
         role: 'user',
         content: [
-          { type: 'text', text: userPrompt },
+          { type: 'input_text', text: userPrompt },
           {
-            type: 'image_url',
+            type: 'input_image',
             image_url: {
               url: dataUrl
             }
@@ -132,7 +132,7 @@ function sendSeendo_check() {
       {
         role: 'user',
         content: [
-          { type: 'text', text: 'Rispondi con la stringa "ok".' }
+          { type: 'input_text', text: 'Rispondi con la stringa "ok".' }
         ]
       }
     ]
