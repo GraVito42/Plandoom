@@ -40,14 +40,15 @@ function sendSeendo(file_photo) {
   var payload = {
     model: 'gpt-4o-mini',
     temperature: 0,
+    response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: systemPrompt },
       {
         role: 'user',
         content: [
-          { type: 'input_text', text: userPrompt },
+          { type: 'text', text: userPrompt },
           {
-            type: 'input_image',
+            type: 'image_url',
             image_url: {
               url: dataUrl
             }
@@ -127,12 +128,13 @@ function sendSeendo_check() {
   var payload = {
     model: 'gpt-4o-mini',
     temperature: 0,
+    response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: 'Sei un assistente di diagnostica.' },
       {
         role: 'user',
         content: [
-          { type: 'input_text', text: 'Rispondi con la stringa "ok".' }
+          { type: 'text', text: 'Rispondi con la stringa "ok".' }
         ]
       }
     ]
