@@ -46,7 +46,12 @@ function sendSeendo(file_photo) {
         role: 'user',
         content: [
           { type: 'input_text', text: userPrompt },
-          { type: 'input_image', image_url: dataUrl }
+          {
+            type: 'input_image',
+            image_url: {
+              url: dataUrl
+            }
+          }
         ]
       }
     ]
