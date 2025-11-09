@@ -798,6 +798,15 @@ function _gl_buildCalendarReminders_(overrides) {
 }
 
 
+function _simpleHtmlEscape(text) {
+  if (text === null || text === undefined) return "";
+  var str = String(text);
+  
+  return str.replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+}
+
 function test_local() {
   var base = new Date();
   var events = [];
