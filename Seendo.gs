@@ -1,20 +1,11 @@
-function sendSeendo(file_photo) {
-  if (!file_photo || !file_photo.file_id) {
-    throw new Error("Foto non valida o file_id mancante.");
-  }
-
+function sendSeendo(imageUrl) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY non configurata nelle proprietà dello script.");
+    throw new Error("OPENAI_API_KEY non configurata.");
   }
 
-  var photoData = _downloadTelegramPhotoAsBase64(file_photo.file_id);
-  if (!photoData || !photoData.base64) {
-    throw new Error("Impossibile scaricare la foto da Telegram.");
-  }
-
-  var mimeType = photoData.mimeType || 'image/jpeg';
-  var dataUrl = 'data:' + mimeType + ';base64,' + photoData.base64;
+  // Non ci sono più photoData, Base64, o MIME type.
+  // Solo l'URL.
 
   var systemPrompt = "Sei un assistente OCR esperto di agende Moleskine. " +
     "Devi restituire solo JSON valido seguendo le istruzioni.";
@@ -38,8 +29,8 @@ function sendSeendo(file_photo) {
   ].join('\n');
 
   var payload = {
-    model: 'gpt-4o-mini',
-    temperature: 0,
+    model: 'gpt-5',
+    temperature: 1,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: systemPrompt },
@@ -50,7 +41,8 @@ function sendSeendo(file_photo) {
           {
             type: 'image_url',
             image_url: {
-              url: dataUrl
+              // --- ECCO LA MAGIA ---
+              url: imageUrl // Passiamo l'URL pubblico
             }
           }
         ]
@@ -67,7 +59,8 @@ function sendSeendo(file_photo) {
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
-
+  
+  // Il resto della funzione (gestione risposta, parsing) è identico a prima
   var responseText = response.getContentText();
   var statusCode = response.getResponseCode();
   if (statusCode < 200 || statusCode >= 300) {
@@ -130,11 +123,13 @@ function sendSeendo_check() {
     temperature: 0,
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: 'Sei un assistente di diagnostica.' },
+      // MODIFICA 1: Specifica JSON nel system prompt
+      { role: 'system', content: 'Sei un assistente di diagnostica. Rispondi solo in formato JSON.' },
       {
         role: 'user',
         content: [
-          { type: 'text', text: 'Rispondi con la stringa "ok".' }
+          // MODIFICA 2: Richiedi un output JSON
+          { type: 'text', text: 'Rispondi con un oggetto JSON: {"status": "ok"}' }
         ]
       }
     ]
@@ -168,18 +163,15 @@ function sendSeendo_check() {
   }
 
   var content = data.choices[0].message.content;
+  
+  // Il test ora dovrebbe restituire un oggetto JSON come stringa
+  Logger.log("Risposta da sendSeendo_check: " + content);
+  
   if (typeof content === 'string') {
-    return content.trim();
+    return content.trim(); // E.g., "{\"status\": \"ok\"}"
   }
 
-  if (Array.isArray(content)) {
-    var parts = content.map(function(item) {
-      return typeof item === 'string' ? item : (item && item.text ? item.text : '');
-    }).join('').trim();
-    if (parts) {
-      return parts;
-    }
-  }
-
+  // ... (il resto della logica di parsing è ok)
+  
   throw new Error("Impossibile interpretare la risposta OpenAI.");
 }
