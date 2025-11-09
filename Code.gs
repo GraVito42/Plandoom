@@ -1,6 +1,6 @@
-var token = PropertiesService.getScriptProperties().getProperty('BOT_TOKEN');; 
+var token = PropertiesService.getScriptProperties().getProperty('BOT_TOKEN'); 
 var telegramUrl = "https://api.telegram.org/bot" + token; 
-var webAppUrl = "https://script.google.com/macros/s/AKfycbylRBQRa_VU-S1iJyRZLzw2BgPDOh51DD8rLYtFJlmXCK3CdEeBqDuzlF77furGfi5b/exec"; 
+var webAppUrl = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL'); 
 
 function _validateJsonCandidate(value) {
   if (value === null || value === undefined) {
@@ -27,18 +27,28 @@ function _validateJsonCandidate(value) {
   }
 }
 
-function sendMessage(chat_id, text) {
-  var url = telegramUrl + "/sendMessage?chat_id=" + encodeURIComponent(String(chat_id)) + "&text=" + encodeURIComponent(text);
-  var response = UrlFetchApp.fetch(url);
+function sendMessage(chat_id, text, parse_mode) {
+  var payload = {
+    chat_id: String(chat_id),
+    text: text
+  };
+  
+  // Aggiunge la modalità di formattazione (es. "HTML") se specificata
+  if (parse_mode) {
+    payload.parse_mode = parse_mode;
+  }
+
+  UrlFetchApp.fetch(telegramUrl + "/sendMessage", {
+    method: "post",
+    payload: payload,
+    muteHttpExceptions: true
+  });
 }
 
 function sendPhoto(chat_id, fileId, caption) {
   _sendTelegramFile(chat_id, fileId, caption, "sendPhoto", "photo");
 }
 
-function sendDocument(chat_id, fileId, caption) {
-  _sendTelegramFile(chat_id, fileId, caption, "sendDocument", "document");
-}
 
 function _sendTelegramFile(chat_id, fileId, caption, method, field) {
   if (!chat_id || !fileId) {
@@ -115,24 +125,45 @@ function doPost(e) {
   var document = _extractDocumentCandidate(message);
   var photo = _extractPhotoCandidate(message);
 
+
   if (photo) {
-    var bestSize = photo[photo.length - 1];
-    if (bestSize && bestSize.file_id) {
+    
+    // NUOVA LOGICA: Usiamo la foto ORIGINALE (la più grande)
+    var originalPhoto = photo[photo.length - 1]; // Indice -1 per l'ultima (più grande)
+    Logger.log("Uso la foto originale (index " + (photo.length - 1) + ")");
+
+    if (originalPhoto && originalPhoto.file_id) {
       try {
-        var ocrResult = sendSeendo(bestSize);
+        // 1. Otteniamo l'URL pubblico della foto
+        var imageUrl = _getTelegramFileUrl(originalPhoto.file_id);
+        
+        // 2. Inviamo l'URL a Seendo (OpenAI)
+        var ocrResult = sendSeendo(imageUrl);
+        
         if (ocrResult && typeof ocrResult === "string") {
-          sendMessage(chat_id, ocrResult);
+          
+          // 3. Inviamo il JSON risultante in chat per ispezione
+          var message = "✅ OCR (Alta Risoluzione) completato. Ecco il JSON:\n<pre>" + 
+                        _simpleHtmlEscape(ocrResult) +
+                        "</pre>";
+          
+          sendMessage(chat_id, message, "HTML");
+          
+          // (L'upsert rimane commentato per ora)
+          // _handleJsonPayload(chat_id, ocrResult, "ocr"); 
+
         } else {
-          sendMessage(chat_id, "❌ L'OCR non ha restituito un risultato valido.");
+          sendMessage(chat_id, "❌ L'OCR (Alta Risoluzione) non ha restituito un risultato valido.");
         }
       } catch (err) {
-        sendMessage(chat_id, "❌ Impossibile elaborare la foto ricevuta: " + (err && err.message ? err.message : err));
+        sendMessage(chat_id, "❌ Impossibile elaborare la foto (Alta Risoluzione): " + (err && err.message ? err.message : err));
       }
     } else {
-      sendMessage(chat_id, "❌ Impossibile elaborare la foto ricevuta.");
+      sendMessage(chat_id, "❌ Impossibile elaborare la foto (file_id mancante).");
     }
-    return;
+    return; // Usciamo dopo aver gestito la foto
   }
+  
 
   if (document) {
     var fileName = document.file_name || "";
@@ -238,25 +269,35 @@ function fetchTelegramFile(fileId) {
   return contentResp.getContentText();
 }
 
-function fetchTelegramFile(fileId) {
-  var fileResp = UrlFetchApp.fetch(telegramUrl + "/getFile?file_id=" + encodeURIComponent(fileId));
+function _getTelegramFileUrl(fileId) {
+  var fileResp = UrlFetchApp.fetch(telegramUrl + '/getFile?file_id=' + encodeURIComponent(fileId));
   var fileData = JSON.parse(fileResp.getContentText());
+  
   if (!fileData.ok || !(fileData.result && fileData.result.file_path)) {
-    throw new Error("Risposta non valida da Telegram.");
+    throw new Error('Risposta non valida da Telegram durante il recupero del file path.');
   }
 
   var filePath = fileData.result.file_path;
-  var downloadUrl = "https://api.telegram.org/file/bot" + token + "/" + filePath;
-  var contentResp = UrlFetchApp.fetch(downloadUrl);
-  return contentResp.getContentText();
+  // Costruisce l'URL completo per il download
+  return 'https://api.telegram.org/file/bot' + token + '/' + filePath;
 }
 
+// NOTA: Se hai ancora una funzione chiamata _downloadTelegramPhotoAsBase64,
+// puoi cancellarla, non ci serve più.
+
 function setWebhook() {
-  const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxab_nYFDG5-gBWZqmSm0zdXgN9uc3X6h7RJZ2Kv8fIG55wVh3xJ8a-CrV-7-cvPpf4/exec';
+  const WEBAPP_URL = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL'); ;
   const del = `https://api.telegram.org/bot${token}/deleteWebhook`;
   const url = `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(WEBAPP_URL)}&drop_pending_updates=true`;
   const respdel = UrlFetchApp.fetch(del);
   const resp = UrlFetchApp.fetch(url);
   Logger.log(respdel.getContentText());
   Logger.log(resp.getContentText());
+}
+
+function delWebhook() {
+  const WEBAPP_URL = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL'); ;
+  const del = `https://api.telegram.org/bot${token}/deleteWebhook`;
+  const respdel = UrlFetchApp.fetch(del);
+  Logger.log(respdel.getContentText());
 }
