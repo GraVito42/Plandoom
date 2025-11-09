@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { 
+        font-family: Arial, sans-serif; 
+        margin: 20px; 
+        background-color: #f9f9f9;
+      }
+      #upload-form {
+        padding: 24px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+      .form-group {
+        margin-bottom: 16px;
+      }
+      label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 6px;
+      }
+      input[type="text"], input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box; /* Assicura che il padding non rompa il layout */
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      button {
+        background-color: #4285F4; /* Stile Google */
+        color: white;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background-color: #aaa;
+        cursor: not-allowed;
+      }
+      #status {
+        margin-top: 16px;
+        font-weight: bold;
+      }
+      .loading { color: #4285F4; }
+      .success { color: #0f9d58; }
+      .error { color: #db4437; }
+    </style>
+  </head>
+  <body>
+    
+    <h2>Plando: Carica Agenda</h2>
+    
+    <div id="upload-form">
+      <div class="form-group">
+        <label for="image">1. Seleziona foto (.jpg, .png) o JSON (.json):</label>
+        <input type="file" id="file-input" accept="image/jpeg, image/png, application/json, .json">
+      </div>
+      
+      <div class="form-group">
+        <label for="tz">2. Fuso orario (solo per upload foto):</label>
+        <input type="text" id="tz" value="Europe/Amsterdam">
+      </div>
+      
+      <div class="form-group">
+        <label for="locale">3. Lingua (solo per upload foto):</label>
+        <input type="text" id="locale" value="it-IT">
+      </div>
+      
+      <button id="submit-button" onclick="handleFormSubmit()">Carica e Processa</button>
+      
+      <div id="status"></div>
+    </div>
+
+    <script>
+      /**
+       * Gestisce il clic sul pulsante.
+       */
+      function handleFormSubmit() {
+        const fileInput = document.getElementById('file-input');
+        const file = fileInput.files[0];
+        
+        // Validazione base
+        if (!file) {
+          updateStatus('Per favore, seleziona un file.', 'error');
+          return;
+        }
+
+        const tz = document.getElementById('tz').value;
+        const locale = document.getElementById('locale').value;
+        const button = document.getElementById('submit-button');
+
+        // Disabilita il pulsante e mostra il caricamento
+        button.disabled = true;
+        updateStatus('Caricamento file in corso...', 'loading');
+
+        const reader = new FileReader();
+
+        // Controlla il tipo di file
+        // Nota: '.json' non ha un tipo MIME standard, quindi controlliamo anche l'estensione
+        if (file.type === 'application/json' || file.name.endsWith('.json')) {
+          
+          // --- È UN JSON: Leggi come testo ---
+          reader.onload = function(e) {
+            const jsonContent = e.target.result;
+            const formObject = {
+              type: 'json',
+              content: jsonContent
+              // tz e locale non servono qui
+            };
+            // Chiama la funzione server generica
+            google.script.run
+              .withSuccessHandler(showSuccess)
+              .withFailureHandler(showError)
+              .processUpload(formObject);
+          };
+          reader.onerror = function(e) {
+            showError(new Error('Impossibile leggere il file JSON.'));
+          };
+          reader.readAsText(file);
+
+        } else if (file.type.startsWith('image/')) {
+          
+          // --- È UN'IMMAGINE: Leggi come Data URL (Base64) ---
+          reader.onload = function(e) {
+            const fileData = e.target.result; // Stringa "data:image/jpeg;base64,..."
+            const formObject = {
+              type: 'image',
+              content: fileData, // Questo è il Base64
+              tz: tz,
+              locale: locale
+            };
+            // Chiama la funzione server generica
+            google.script.run
+              .withSuccessHandler(showSuccess)
+              .withFailureHandler(showError)
+              .processUpload(formObject);
+          };
+          reader.onerror = function(e) {
+            showError(new Error('Impossibile leggere il file immagine.'));
+          };
+          reader.readAsDataURL(file);
+
+        } else {
+          showError(new Error('Tipo file non supportato. Seleziona .jpg, .png o .json.'));
+          button.disabled = false;
+        }
+      }
+
+      /**
+       * Callback in caso di successo della chiamata server.
+       * @param {string} message - Il messaggio ritornato da processUpload.
+       */
+      function showSuccess(message) {
+        updateStatus(message, 'success');
+        document.getElementById('submit-button').disabled = false;
+        document.getElementById('file-input').value = ''; // Resetta l'input file
+      }
+
+      /**
+       * Callback in caso di errore della chiamata server.
+       * @param {Error} err - L'oggetto errore.
+       */
+      function showError(err) {
+        updateStatus('Errore: ' + err.message, 'error');
+        document.getElementById('submit-button').disabled = false;
+      }
+
+      /**
+       * Helper per aggiornare il messaggio di stato.
+       */
+      function updateStatus(message, type) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = message;
+        statusEl.className = type; // Applica la classe di stile
+      }
+    </script>
+  </body>
+</html>
