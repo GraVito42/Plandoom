@@ -1,829 +1,817 @@
-function sendGlando(dic_raw) {
-  try {
-    var dic = _sg_normalize(dic_raw);          // -> { events:[...] }
-    _sg_validate(dic.events);                  // lancia se non valida
-    return upsert(dic);                        // usa la tua funzione minimale
-  } catch (e) {
-    var err = String(e && e.message ? e.message : e);
-    try { Logger.log("sendGlando error: " + err); } catch(_){}
-    return { ok: false, error: err };
-  }
-}
+/**
+ * =================================================================
+ * FILE: Glando.gs (Basato sulla tua logica v-Upsert)
+ * RUOLO: Logica di business "Glando" (Core Upsert) e utility.
+ * =================================================================
+ */
 
 // Variabile globale mantenuta per compatibilità con script esterni che
 // leggono l'ultimo `resp` della comunicazione con le API Notion.
 var resp;
 
-function _sg_normalize(input) {
-  var obj = input;
+var Glando = (function() {
+  
+  // =================================================================
+  // NUOVA FUNZIONE: GESTORE PER UI HTML
+  // =================================================================
+  
+  /**
+   * Gestisce l'upload dall'interfaccia HTML (chiamata da processUpload).
+   * @param {object} formObject Dati dal form HTML.
+   * @returns {string} Messaggio di successo/errore per l'utente.
+   */
+  function handleUIUpload(formObject) {
+    try {
+      let dic_raw;
 
-  // Se stringa → parse
-  if (typeof obj === "string") {
-    var trimmed = obj.trim();
-    if (!trimmed) throw new Error("Input vuoto.");
-    try { obj = JSON.parse(trimmed); }
-    catch(e){ throw new Error("Stringa JSON non valida."); }
+      // --- CASO 1: Il file è un JSON (flusso diretto) ---
+      if (formObject.type === 'json') {
+        console.log("Avvio processo UPLOAD JSON...");
+        dic_raw = formObject.content; // Passiamo la stringa JSON
+      
+      // --- CASO 2: Il file è un'IMMAGINE (flusso OCR) ---
+      } else if (formObject.type === 'image') {
+        console.log("Avvio processo UPLOAD IMMAGINE...");
+        
+        // --- LOGICA OCR (Simulata/Sostituire) ---
+        // (Qui dovresti mettere la logica per chiamare l'API OCR)
+        // Per ora, simuliamo che l'API OCR ritorni un JSON
+        // che `sendGlando` può normalizzare.
+        
+        // --- Inizio Blocco Simulazione (da rimuovere in produzione) ---
+        console.log("Simulazione chiamata API OCR...");
+        const mockEvent = { 
+          "kind": "Event", "title": "Evento Similato da FOTO",
+          "start":"2025-11-10T09:00:00+01:00", "end": "2025-11-10T10:00:00+01:00",
+          "location":"Ufficio", "project":"Test UI Immagine", "source": "AgendaPhoto",
+          "external_id": "ocr_" + new Date().getTime()
+        };
+        // `sendGlando` sa gestire un singolo oggetto evento
+        dic_raw = mockEvent; 
+        // --- Fine Blocco Simulazione ---
+
+      } else {
+        throw new Error('Tipo di file non gestito.');
+      }
+      
+      // --- LOGICA CENTRALE ---
+      // Chiama la tua funzione principale con l'input grezzo
+      const results = sendGlando(dic_raw);
+      // ----------------------
+
+      if (!results.ok) {
+        throw new Error('Errore durante l\'upsert: ' + results.error);
+      }
+      
+      return `Elaborazione completata! Eventi processati.`;
+
+    } catch (err) {
+      console.error('Errore in Glando.handleUIUpload:', err.message, err.stack);
+      return 'Errore: ' + err.message; // Ritorna l'errore al client
+    }
   }
+  
+  // =================================================================
+  // IL TUO CODICE ESISTENTE (INCOLLATO QUI)
+  // =================================================================
 
-  // Se array di eventi
-  if (Array.isArray(obj)) return { events: obj };
-
-  // Se oggetto con events
-  if (obj && typeof obj === "object") {
-    if (Array.isArray(obj.events)) return { events: obj.events };
-    // Se sembra un singolo evento
-    var looksLikeEvent = ("title" in obj) || ("start" in obj) || ("due" in obj);
-    if (looksLikeEvent) return { events: [obj] };
+  function sendGlando(dic_raw) {
+    try {
+      var dic = _sg_normalize(dic_raw);        // -> { events:[...] }
+      _sg_validate(dic.events);              // lancia se non valida
+      return upsert(dic);                    // usa la tua funzione minimale
+    } catch (e) {
+      var err = String(e && e.message ? e.message : e);
+      try { Logger.log("sendGlando error: " + err); } catch(_){}
+      return { ok: false, error: err };
+    }
   }
+  
+  function _sg_normalize(input) {
+    var obj = input;
 
-  throw new Error("Formato non riconosciuto: usa {events:[...]}, un array di eventi o un singolo evento.");
-}
-
-function _sg_validate(events) {
-  if (!events || !events.length) throw new Error("Nessun evento trovato.");
-
-  var errs = [];
-  for (var i = 0; i < events.length; i++) {
-    var ev = events[i] || {};
-    var ctx = "evento #" + (i + 1) + ": ";
-    // title
-    if (typeof ev.title !== "string" || !ev.title.trim())
-      errs.push(ctx + "campo 'title' mancante o vuoto.");
-    // date: start o due
-    var hasStart = typeof ev.start === "string" && _sg_isIsoDate(ev.start);
-    var hasDue   = typeof ev.due   === "string" && _sg_isIsoDate(ev.due);
-
-    if (!hasStart && !hasDue)
-      errs.push(ctx + "serve almeno 'start' o 'due' in formato ISO (es. 2025-10-21T14:30:00Z).");
-
-    // end opzionale: se presente dev’essere valido ISO
-    if (typeof ev.end !== "undefined" && ev.end !== null) {
-      if (typeof ev.end !== "string" || !_sg_isIsoDate(ev.end))
-        errs.push(ctx + "'end' non è una data ISO valida.");
+    // Se stringa → parse
+    if (typeof obj === "string") {
+      var trimmed = obj.trim();
+      if (!trimmed) throw new Error("Input vuoto.");
+      try { obj = JSON.parse(trimmed); }
+      catch(e){ throw new Error("Stringa JSON non valida."); }
     }
 
-    // coerenza temporale se start & end presenti
-    if (hasStart && typeof ev.end === "string" && _sg_isIsoDate(ev.end)) {
-      var s = new Date(ev.start).getTime();
-      var e = new Date(ev.end).getTime();
-      if (!(e > s)) errs.push(ctx + "'end' deve essere successivo a 'start'.");
+    // Se array di eventi
+    if (Array.isArray(obj)) return { events: obj };
+
+    // Se oggetto con events
+    if (obj && typeof obj === "object") {
+      if (Array.isArray(obj.events)) return { events: obj.events };
+      // Se sembra un singolo evento
+      var looksLikeEvent = ("title" in obj) || ("start" in obj) || ("due" in obj);
+      if (looksLikeEvent) return { events: [obj] };
     }
+
+    throw new Error("Formato non riconosciuto: usa {events:[...]}, un array di eventi o un singolo evento.");
   }
 
-  if (errs.length) throw new Error("Validazione fallita:\n- " + errs.join("\n- "));
-}
+  function _sg_validate(events) {
+    if (!events || !events.length) throw new Error("Nessun evento trovato.");
 
-function _sg_isIsoDate(s) {
-  // Accetta ISO standard (toISOString-like); Date.parse basta per convalida base
-  var t = Date.parse(s);
-  return !isNaN(t);
-}
+    var errs = [];
+    for (var i = 0; i < events.length; i++) {
+      var ev = events[i] || {};
+      var ctx = "evento #" + (i + 1) + ": ";
+      // title
+      if (typeof ev.title !== "string" || !ev.title.trim())
+        errs.push(ctx + "campo 'title' mancante o vuoto.");
+      // date: start o due
+      var hasStart = typeof ev.start === "string" && _sg_isIsoDate(ev.start);
+      var hasDue   = typeof ev.due   === "string" && _sg_isIsoDate(ev.due);
 
-function gl_gs_upsert(dic) {
-  var p   = PropertiesService.getScriptProperties();
-  var sid = p.getProperty("GLANDO_SHEET_ID");
-  var sname = p.getProperty("GLANDO_SHEET_NAME") || "Glando";
-  if (!sid) throw new Error("GLANDO_SHEET_ID non configurato.");
+      if (!hasStart && !hasDue)
+        errs.push(ctx + "serve almeno 'start' o 'due' in formato ISO (es. 2025-10-21T14:30:00Z).");
 
-  var sheetMeta = _gs_getSheetMetadata_(sid, sname);
-  var sheetId = sheetMeta.sheetId;
+      // end opzionale: se presente dev’essere valido ISO
+      if (typeof ev.end !== "undefined" && ev.end !== null) {
+        if (typeof ev.end !== "string" || !_sg_isIsoDate(ev.end))
+          errs.push(ctx + "'end' non è una data ISO valida.");
+      }
 
-  var headers = _gs_ensureHeaders_(sid, sname, sheetId);
-  var idxExternal = headers.indexOf("ExternalID");
-  if (idxExternal < 0) throw new Error("Header 'ExternalID' mancante.");
-
-  var colLetter = _gs_columnLetter_(headers.length);
-  var dataRange = sname + "!A2:" + colLetter;
-  var dataResp = Sheets.Spreadsheets.Values.get(sid, dataRange);
-  var existing = dataResp.values || [];
-
-  var rowByExt = {};
-  for (var r = 0; r < existing.length; r++) {
-    var row = existing[r] || [];
-    var ext = row[idxExternal] || "";
-    if (ext) rowByExt[ext] = r + 2; // offset header
-  }
-
-  var updates = [];
-  var appends = [];
-
-  (dic.events || []).forEach(function(ev) {
-    var rawColor = ev.color_id;
-    if (rawColor === undefined || rawColor === null || String(rawColor).trim() === "") {
-      rawColor = ev.colorId;
-    }
-
-    var sheetColor = "";
-    if (rawColor !== undefined && rawColor !== null && String(rawColor).trim() !== "") {
-      var numericColor = Number(rawColor);
-      sheetColor = isNaN(numericColor) ? String(rawColor).trim() : numericColor;
-    }
-
-    var remindersCell = (ev.reminders && ev.reminders.length) ? JSON.stringify(ev.reminders) : "";
-
-    var record = {
-      ExternalID: ev.external_id || "",
-      Title:      ev.title || "Untitled",
-      Start:      ev.start || "",
-      End:        ev.end || "",
-      Due:        ev.due || "",
-      Location:   ev.location || "",
-      Status:     ev.status || "",
-      Kind:       ev.kind || "Event",
-      Scope:      ev.scope || "General",
-      Source:     ev.source || "Calendar",
-      CalendarEventId: ev.calendar_event_id || "",
-      NotionPageId:    ev.notion_page_id || "",
-      colorId:         sheetColor,
-      ColorId:         sheetColor,
-      reminders:       remindersCell,
-      Reminders:       remindersCell,
-      LastSynced:      new Date().toISOString()
-    };
-
-    var row = headers.map(function(h){ return (h in record) ? record[h] : ""; });
-
-    var ext = record.ExternalID;
-    var rowIndex = ext && rowByExt[ext] ? rowByExt[ext] : null;
-    if (rowIndex) {
-      updates.push({
-        range: sname + "!A" + rowIndex + ":" + colLetter + rowIndex,
-        values: row
-      });
-    } else {
-      appends.push(row);
-      if (ext) {
-        var newRowIndex = existing.length + appends.length + 1; // 1 for header, existing offset
-        rowByExt[ext] = newRowIndex;
+      // coerenza temporale se start & end presenti
+      if (hasStart && typeof ev.end === "string" && _sg_isIsoDate(ev.end)) {
+        var s = new Date(ev.start).getTime();
+        var e = new Date(ev.end).getTime();
+        if (!(e > s)) errs.push(ctx + "'end' deve essere successivo a 'start'.");
       }
     }
-  });
 
-  updates.forEach(function(update) {
-    Sheets.Spreadsheets.Values.update({ values: [update.values] }, sid, update.range, {
-      valueInputOption: "RAW"
-    });
-  });
-
-  if (appends.length) {
-    Sheets.Spreadsheets.Values.append({ values: appends }, sid, sname + "!A1", {
-      valueInputOption: "RAW",
-      insertDataOption: "INSERT_ROWS"
-    });
+    if (errs.length) throw new Error("Validazione fallita:\n- " + errs.join("\n- "));
   }
 
-  return { ok: true };
-}
+  function _sg_isIsoDate(s) {
+    // Accetta ISO standard (toISOString-like); Date.parse basta per convalida base
+    var t = Date.parse(s);
+    return !isNaN(t);
+  }
 
-function _gs_getSheetMetadata_(spreadsheetId, sheetName) {
-  var spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-  var sheet = null;
-  if (spreadsheet.sheets) {
-    for (var i = 0; i < spreadsheet.sheets.length; i++) {
-      var candidate = spreadsheet.sheets[i];
-      if (candidate && candidate.properties && candidate.properties.title === sheetName) {
-        sheet = candidate.properties;
-        break;
-      }
+  function gl_gs_upsert(dic) {
+    var p   = PropertiesService.getScriptProperties();
+    // MODIFICA: Utilizza i nomi delle proprietà che abbiamo definito
+    var sid = p.getProperty("LOG_SHEET_ID"); 
+    // Il tuo codice cerca GLANDO_SHEET_ID, ma noi l'abbiamo chiamato LOG_SHEET_ID
+    if (!sid) {
+      sid = p.getProperty("GLANDO_SHEET_ID"); // Fallback per il tuo nome
     }
-  }
-
-  if (!sheet) {
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{ addSheet: { properties: { title: sheetName } } }]
-    }, spreadsheetId);
-    var refreshed = Sheets.Spreadsheets.get(spreadsheetId);
-    for (var j = 0; j < refreshed.sheets.length; j++) {
-      var props = refreshed.sheets[j].properties;
-      if (props && props.title === sheetName) {
-        sheet = props;
-        break;
-      }
+    
+    var sname = p.getProperty("GLANDO_SHEET_NAME") || "Glando";
+    
+    // MODIFICA: Aggiorniamo il nome "Glando" al nostro "Log"
+    if (sname === "Glando") {
+      sname = p.getProperty("LOG_SHEET_NAME") || "Glando"; // Il nostro nome di foglio
     }
-  }
+    
+    if (!sid) throw new Error("LOG_SHEET_ID (o GLANDO_SHEET_ID) non configurato.");
 
-  if (!sheet) throw new Error("Impossibile ottenere il foglio '" + sheetName + "'.");
+    var sheetMeta = _gs_getSheetMetadata_(sid, sname);
+    var sheetId = sheetMeta.sheetId;
 
-  return sheet;
-}
+    var headers = _gs_ensureHeaders_(sid, sname, sheetId);
+    var idxExternal = headers.indexOf("ExternalID");
+    if (idxExternal < 0) throw new Error("Header 'ExternalID' mancante.");
 
-function _gs_ensureHeaders_(spreadsheetId, sheetName, sheetId) {
-  var headers = [
-    "ExternalID","Title","Start","End","Due","Location",
-    "Status","Kind","Scope","Source",
-    "CalendarEventId","NotionPageId","ColorId","Reminders","LastSynced"
-  ];
+    var colLetter = _gs_columnLetter_(headers.length);
+    var dataRange = sname + "!A2:" + colLetter;
+    var dataResp = Sheets.Spreadsheets.Values.get(sid, dataRange);
+    var existing = dataResp.values || [];
 
-  var desiredRange = sheetName + "!1:1";
-  var current = Sheets.Spreadsheets.Values.get(spreadsheetId, desiredRange).values;
-  var currentRow = current && current.length ? current[0] : [];
-  var equal = currentRow.length === headers.length && headers.every(function(h, i){ return currentRow[i] === h; });
+    var rowByExt = {};
+    for (var r = 0; r < existing.length; r++) {
+      var row = existing[r] || [];
+      var ext = row[idxExternal] || "";
+      if (ext) rowByExt[ext] = r + 2; // offset header
+    }
 
-  if (!equal) {
-    Sheets.Spreadsheets.Values.update({ values: [headers] }, spreadsheetId, desiredRange, {
-      valueInputOption: "RAW"
-    });
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{
-        updateSheetProperties: {
-          properties: { sheetId: sheetId, gridProperties: { frozenRowCount: 1 } },
-          fields: "gridProperties.frozenRowCount"
+    var updates = [];
+    var appends = [];
+
+    (dic.events || []).forEach(function(ev) {
+      var rawColor = ev.color_id;
+      if (rawColor === undefined || rawColor === null || String(rawColor).trim() === "") {
+        rawColor = ev.colorId;
+      }
+
+      var sheetColor = "";
+      if (rawColor !== undefined && rawColor !== null && String(rawColor).trim() !== "") {
+        var numericColor = Number(rawColor);
+        sheetColor = isNaN(numericColor) ? String(rawColor).trim() : numericColor;
+      }
+
+      var remindersCell = (ev.reminders && ev.reminders.length) ? JSON.stringify(ev.reminders) : "";
+
+      var record = {
+        ExternalID: ev.external_id || "",
+        Title:      ev.title || "Untitled",
+        Start:      ev.start || "",
+        End:        ev.end || "",
+        Due:        ev.due || "",
+        Location:   ev.location || "",
+        Status:     ev.status || "",
+        Kind:       ev.kind || "Event",
+        Scope:      ev.scope || "General",
+        Source:     ev.source || "Calendar",
+        CalendarEventId: ev.calendar_event_id || "",
+        NotionPageId:    ev.notion_page_id || "",
+        colorId:         sheetColor, // chiave minuscola
+        ColorId:         sheetColor, // chiave maiuscola
+        reminders:       remindersCell, // chiave minuscola
+        Reminders:       remindersCell, // chiave maiuscola
+        LastSynced:      new Date().toISOString()
+      };
+
+      var row = headers.map(function(h){ return (h in record) ? record[h] : ""; });
+
+      var ext = record.ExternalID;
+      var rowIndex = ext && rowByExt[ext] ? rowByExt[ext] : null;
+      if (rowIndex) {
+        updates.push({
+          range: sname + "!A" + rowIndex + ":" + colLetter + rowIndex,
+          values: row
+        });
+      } else {
+        appends.push(row);
+        if (ext) {
+          var newRowIndex = existing.length + appends.length + 1; // 1 for header, existing offset
+          rowByExt[ext] = newRowIndex;
         }
-      }]
-    }, spreadsheetId);
-  }
-
-  return headers;
-}
-
-function _gs_columnLetter_(index) {
-  var letters = "";
-  var n = index;
-  while (n > 0) {
-    var remainder = (n - 1) % 26;
-    letters = String.fromCharCode(65 + remainder) + letters;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letters || "A";
-}
-
-function upsert(dic) {
-  var p = PropertiesService.getScriptProperties();
-  var token = p.getProperty("NOTION_TOKEN");
-  var dbId  = p.getProperty("NOTION_DB_ID");
-  var calendarId = p.getProperty("GLANDO_CALENDAR_ID") || "primary";
-
-  var results = [];
-  var notionSchema = null;
-  var notionLookupCache = {};
-  if (token && dbId) {
-    notionSchema = _gl_getNotionDbSchema_(token, dbId);
-  }
-
-  dic.events.forEach(function(ev) {
-    // === Calendar (Google Calendar API) ===
-    var startIso = ev.start || ev.due;
-    if (!startIso) throw new Error("Evento privo di data di inizio o scadenza.");
-
-    var endIso = ev.end;
-    if (!endIso) {
-      var startDate = new Date(startIso);
-      if (isNaN(startDate.getTime())) {
-        throw new Error("Data di inizio non valida per l'evento '" + ev.title + "'.");
       }
-      var defaultEnd = new Date(startDate.getTime() + 30 * 60000);
-      endIso = defaultEnd.toISOString();
-    }
-
-    ev.start = startIso;
-    ev.end = endIso;
-
-    var normalizedColor = _gl_normalizeColorId_(ev.colorId, ev.color_id);
-    if (normalizedColor) {
-      ev.colorId = normalizedColor;
-      ev.color_id = normalizedColor;
-    }
-
-    var remindersInfo = _gl_parseReminders_(ev.reminders);
-    var reminderTexts = remindersInfo.texts || [];
-    var reminderValues = remindersInfo.values || [];
-    ev.reminders = reminderValues;
-
-    var calendarEvent = {
-      summary: ev.title,
-      description: "ExtID:" + (ev.external_id || ""),
-      start: _gl_buildCalendarTime_(startIso),
-      end: _gl_buildCalendarTime_(endIso)
-    };
-
-    if (normalizedColor) {
-      calendarEvent.colorId = normalizedColor;
-    }
-
-    if (ev.location) {
-      calendarEvent.location = ev.location;
-    }
-
-    var calendarReminders = _gl_buildCalendarReminders_(remindersInfo.overrides);
-    if (calendarReminders) {
-      calendarEvent.reminders = calendarReminders;
-    }
-
-    var insertedEvent = Calendar.Events.insert(calendarEvent, calendarId);
-    var appliedColor = insertedEvent.colorId || normalizedColor || "";
-    if (appliedColor) {
-      appliedColor = _gl_normalizeColorId_(appliedColor, appliedColor);
-      ev.colorId = appliedColor;
-      ev.color_id = appliedColor;
-    }
-    ev.calendar_event_id = insertedEvent.id;
-    var calRes = { eventId: insertedEvent.id, action: "created" };
-
-    // === Notion ===
-    var notionRes = null;
-    if (token && dbId) {
-      notionRes = _gl_upsertNotionPage_(ev, token, dbId, appliedColor, reminderTexts, notionSchema, notionLookupCache);
-      if (notionRes && notionRes.id) {
-        ev.notion_page_id = notionRes.id;
-      }
-    }
-
-    results.push({
-      externalId: ev.external_id,
-      calendar: calRes,
-      notion: notionRes ? { pageId: notionRes.id, action: notionRes.action } : null
     });
-  }
-  );
-  gl_gs_upsert(dic);
 
-  return { ok: true, results: results };
-}
+    updates.forEach(function(update) {
+      Sheets.Spreadsheets.Values.update({ values: [update.values] }, sid, update.range, {
+        valueInputOption: "RAW"
+      });
+    });
 
-function _gl_buildCalendarTime_(isoString) {
-  if (!isoString) return null;
-  var isDateOnly = isoString.length <= 10 || (isoString.indexOf("T") === -1);
-  if (isDateOnly) {
-    return { date: isoString.substring(0, 10) };
-  }
-  return { dateTime: isoString };
-}
-
-function _gl_upsertNotionPage_(ev, token, dbId, colorValue, reminderTexts, notionSchema, notionLookupCache) {
-  var externalId = ev.external_id || "";
-  var colorText = colorValue ? String(colorValue) : "";
-  var remindersArray = Array.isArray(reminderTexts) ? reminderTexts : [];
-
-  var pageId = ev.notion_page_id || ev.notionPageId || "";
-  if (!pageId && externalId) {
-    pageId = _gl_resolveNotionPageIdByExternalId_(token, dbId, notionSchema, externalId, notionLookupCache) || "";
-    if (pageId) {
-      ev.notion_page_id = pageId;
-      ev.notionPageId = pageId;
+    if (appends.length) {
+      Sheets.Spreadsheets.Values.append({ values: appends }, sid, sname + "!A1", {
+        valueInputOption: "RAW",
+        insertDataOption: "INSERT_ROWS"
+      });
     }
+
+    return { ok: true };
   }
 
-  var nameProperty = _gl_findNotionPropertyInfo_(notionSchema, "Name");
-  var startProperty = _gl_findNotionPropertyInfo_(notionSchema, "Start");
-  var endProperty = _gl_findNotionPropertyInfo_(notionSchema, "End");
-  var externalProperty = _gl_findNotionPropertyInfo_(notionSchema, "ExternalID");
-
-  var props = {};
-  var nameKey = nameProperty ? nameProperty.name : "Name";
-  props[nameKey] = { "title": _gl_makeRichTextArray_(ev.title) };
-
-  var startKey = startProperty ? startProperty.name : "Start";
-  props[startKey] = { "date": { "start": ev.start, "end": ev.end || null } };
-
-  var externalKey = externalProperty ? externalProperty.name : "ExternalID";
-  props[externalKey] = { "rich_text": externalId ? _gl_makeRichTextArray_(externalId) : [] };
-
-  if (ev.end) {
-    var endKey = endProperty ? endProperty.name : "End";
-    props[endKey] = { "date": { "start": ev.end } };
-  }
-
-  var path = pageId ? "/pages/" + pageId : "/pages";
-  var method = pageId ? "patch" : "post";
-  var body = pageId ? { properties: props } : { parent: { database_id: dbId }, properties: props };
-
-  _gl_assignColorProperty_(props, notionSchema, colorText);
-  _gl_assignRemindersProperty_(props, notionSchema, remindersArray);
-
-  // Manteniamo il nome `resp` usato storicamente per evitare ReferenceError
-  // in altri file che potrebbero loggare questa variabile globale.
-  resp = UrlFetchApp.fetch("https://api.notion.com/v1" + path, {
-    method: method,
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json"
-    },
-    muteHttpExceptions: true,
-    payload: JSON.stringify(body)
-  });
-
-  var notionResp = resp;
-
-  var status = notionResp.getResponseCode();
-  var text = notionResp.getContentText();
-  if (status === 401) {
-    var unauthorizedMessage = text;
-    try {
-      var unauthorizedParsed = JSON.parse(text);
-      if (unauthorizedParsed && unauthorizedParsed.message) {
-        unauthorizedMessage = unauthorizedParsed.message;
+  function _gs_getSheetMetadata_(spreadsheetId, sheetName) {
+    var spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+    var sheet = null;
+    if (spreadsheet.sheets) {
+      for (var i = 0; i < spreadsheet.sheets.length; i++) {
+        var candidate = spreadsheet.sheets[i];
+        if (candidate && candidate.properties && candidate.properties.title === sheetName) {
+          sheet = candidate.properties;
+          break;
+        }
       }
-    } catch (_) {}
-    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
-  }
+    }
 
-  if (status < 200 || status >= 300) {
-    throw new Error("Notion API error (" + status + "): " + text);
-  }
-
-  var parsed = JSON.parse(text);
-  parsed.action = pageId ? "updated" : "created";
-  return parsed;
-}
-
-var _gl_cachedNotionSchemas_ = {};
-
-function _gl_getNotionDbSchema_(token, dbId) {
-  if (_gl_cachedNotionSchemas_[dbId]) {
-    return _gl_cachedNotionSchemas_[dbId];
-  }
-
-  // Idem come sopra: `resp` resta la variabile principale per compatibilità.
-  resp = UrlFetchApp.fetch("https://api.notion.com/v1/databases/" + dbId, {
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Notion-Version": "2022-06-28"
-    },
-    muteHttpExceptions: true
-  });
-
-  var notionResp = resp;
-
-  var status = notionResp.getResponseCode();
-  var text = notionResp.getContentText();
-  if (status === 401) {
-    var unauthorizedMessage = text;
-    try {
-      var unauthorizedParsed = JSON.parse(text);
-      if (unauthorizedParsed && unauthorizedParsed.message) {
-        unauthorizedMessage = unauthorizedParsed.message;
+    if (!sheet) {
+      Sheets.Spreadsheets.batchUpdate({
+        requests: [{ addSheet: { properties: { title: sheetName } } }]
+      }, spreadsheetId);
+      var refreshed = Sheets.Spreadsheets.get(spreadsheetId);
+      for (var j = 0; j < refreshed.sheets.length; j++) {
+        var props = refreshed.sheets[j].properties;
+        if (props && props.title === sheetName) {
+          sheet = props;
+          break;
+        }
       }
-    } catch (_) {}
-    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
-  }
-
-  if (status < 200 || status >= 300) {
-    throw new Error("Notion API error (" + status + "): " + text);
-  }
-
-  var parsed = JSON.parse(text);
-  _gl_cachedNotionSchemas_[dbId] = parsed;
-  return parsed;
-}
-
-function _gl_normalizePropertyName_(name) {
-  return String(name || "")
-    .toLowerCase()
-    .replace(/[\s_\-]+/g, "");
-}
-
-function _gl_findNotionPropertyInfo_(schema, targetName) {
-  if (!schema || !schema.properties) return null;
-  if (schema.properties[targetName]) {
-    return { name: targetName, definition: schema.properties[targetName] };
-  }
-
-  var lowerTarget = String(targetName).toLowerCase();
-  var normalizedTarget = _gl_normalizePropertyName_(targetName);
-
-  for (var key in schema.properties) {
-    if (!schema.properties.hasOwnProperty(key)) continue;
-    var def = schema.properties[key];
-    if (String(key).toLowerCase() === lowerTarget) {
-      return { name: key, definition: def };
     }
-    if (_gl_normalizePropertyName_(key) === normalizedTarget) {
-      return { name: key, definition: def };
+
+    if (!sheet) throw new Error("Impossibile ottenere il foglio '" + sheetName + "'.");
+
+    return sheet;
+  }
+
+  function _gs_ensureHeaders_(spreadsheetId, sheetName, sheetId) {
+    var headers = [
+      "ExternalID","Title","Start","End","Due","Location",
+      "Status","Kind","Scope","Source",
+      "CalendarEventId","NotionPageId","ColorId","Reminders","LastSynced"
+    ];
+
+    var desiredRange = sheetName + "!1:1";
+    var current = Sheets.Spreadsheets.Values.get(spreadsheetId, desiredRange).values;
+    var currentRow = current && current.length ? current[0] : [];
+    var equal = currentRow.length === headers.length && headers.every(function(h, i){ return currentRow[i] === h; });
+
+    if (!equal) {
+      Sheets.Spreadsheets.Values.update({ values: [headers] }, spreadsheetId, desiredRange, {
+        valueInputOption: "RAW"
+      });
+      Sheets.Spreadsheets.batchUpdate({
+        requests: [{
+          updateSheetProperties: {
+            properties: { sheetId: sheetId, gridProperties: { frozenRowCount: 1 } },
+            fields: "gridProperties.frozenRowCount"
+          }
+        }]
+      }, spreadsheetId);
     }
+
+    return headers;
   }
-  return null;
-}
 
-function _gl_makeRichTextArray_(value) {
-  var text = String(value || "");
-  if (!text) return [];
-  return [{ type: "text", text: { content: text } }];
-}
-
-function _gl_assignColorProperty_(props, schema, colorValue) {
-  var info = _gl_findNotionPropertyInfo_(schema, "colorId");
-  var key = info ? info.name : "colorId";
-  var def = info ? info.definition : null;
-  var hasValue = colorValue !== null && colorValue !== undefined && String(colorValue).trim() !== "";
-  var stringValue = hasValue ? String(colorValue).trim() : "";
-
-  if (def && def.type === "number") {
-    var num = hasValue ? Number(stringValue) : null;
-    if (hasValue && isNaN(num)) {
-      num = null;
+  function _gs_columnLetter_(index) {
+    var letters = "";
+    var n = index;
+    while (n > 0) {
+      var remainder = (n - 1) % 26;
+      letters = String.fromCharCode(65 + remainder) + letters;
+      n = Math.floor((n - 1) / 26);
     }
-    props[key] = { number: num };
-    return;
+    return letters || "A";
   }
 
-  if (def && def.type === "select") {
-    props[key] = hasValue ? { select: { name: stringValue } } : { select: null };
-    return;
-  }
+  function upsert(dic) {
+    var p = PropertiesService.getScriptProperties();
+    var token = p.getProperty("NOTION_TOKEN");
+    var dbId  = p.getProperty("NOTION_DB_ID");
+    var calendarId = p.getProperty("GLANDO_CALENDAR_ID") || "primary";
 
-  if (def && def.type === "multi_select") {
-    props[key] = hasValue ? { multi_select: [{ name: stringValue }] } : { multi_select: [] };
-    return;
-  }
-
-  props[key] = hasValue ? { rich_text: _gl_makeRichTextArray_(stringValue) } : { rich_text: [] };
-}
-
-function _gl_assignRemindersProperty_(props, schema, reminders) {
-  var info = _gl_findNotionPropertyInfo_(schema, "reminders");
-  var key = info ? info.name : "reminders";
-  var def = info ? info.definition : null;
-  var values = Array.isArray(reminders) ? reminders.filter(function(item){
-    return item !== null && item !== undefined && String(item).trim() !== "";
-  }) : [];
-
-  if (def && def.type === "multi_select") {
-    props[key] = { multi_select: values.map(function(val){ return { name: String(val) }; }) };
-    return;
-  }
-
-  if (def && def.type === "select") {
-    var first = values.length ? String(values[0]) : "";
-    props[key] = first ? { select: { name: first } } : { select: null };
-    return;
-  }
-
-  if (def && def.type === "number") {
-    if (values.length) {
-      var candidate = Number(values[0]);
-      props[key] = { number: isNaN(candidate) ? null : candidate };
-    } else {
-      props[key] = { number: null };
+    var results = [];
+    var notionSchema = null;
+    var notionLookupCache = {};
+    if (token && dbId) {
+      notionSchema = _gl_getNotionDbSchema_(token, dbId);
     }
-    return;
-  }
 
-  props[key] = values.length ? { rich_text: _gl_makeRichTextArray_(values.join(", ")) } : { rich_text: [] };
-}
+    dic.events.forEach(function(ev) {
+      // === Calendar (Google Calendar API) ===
+      var startIso = ev.start || ev.due;
+      if (!startIso) throw new Error("Evento privo di data di inizio o scadenza.");
 
-function _gl_resolveNotionPageIdByExternalId_(token, dbId, schema, externalId, cache) {
-  if (!externalId) return "";
-
-  var cacheKey = String(externalId);
-  if (cache && Object.prototype.hasOwnProperty.call(cache, cacheKey)) {
-    return cache[cacheKey] || "";
-  }
-
-  var filter = _gl_buildNotionFilterForExternalId_(schema, externalId);
-  if (!filter) {
-    if (cache) cache[cacheKey] = "";
-    return "";
-  }
-
-  // Conserviamo `resp` per compatibilità con eventuali log esterni.
-  resp = UrlFetchApp.fetch("https://api.notion.com/v1/databases/" + dbId + "/query", {
-    method: "post",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json"
-    },
-    muteHttpExceptions: true,
-    payload: JSON.stringify({ filter: filter, page_size: 1 })
-  });
-
-  var notionResp = resp;
-
-  var status = notionResp.getResponseCode();
-  var text = notionResp.getContentText();
-  if (status === 401) {
-    var unauthorizedMessage = text;
-    try {
-      var unauthorizedParsed = JSON.parse(text);
-      if (unauthorizedParsed && unauthorizedParsed.message) {
-        unauthorizedMessage = unauthorizedParsed.message;
+      var endIso = ev.end;
+      if (!endIso) {
+        var startDate = new Date(startIso);
+        if (isNaN(startDate.getTime())) {
+          throw new Error("Data di inizio non valida per l'evento '" + ev.title + "'.");
+        }
+        var defaultEnd = new Date(startDate.getTime() + 30 * 60000);
+        endIso = defaultEnd.toISOString();
       }
-    } catch (_) {}
-    throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
+
+      ev.start = startIso;
+      ev.end = endIso;
+
+      var normalizedColor = _gl_normalizeColorId_(ev.colorId, ev.color_id);
+      if (normalizedColor) {
+        ev.colorId = normalizedColor;
+        ev.color_id = normalizedColor;
+      }
+
+      var remindersInfo = _gl_parseReminders_(ev.reminders);
+      var reminderTexts = remindersInfo.texts || [];
+      var reminderValues = remindersInfo.values || [];
+      ev.reminders = reminderValues;
+
+      var calendarEvent = {
+        summary: ev.title,
+        description: "ExtID:" + (ev.external_id || ""),
+        start: _gl_buildCalendarTime_(startIso),
+        end: _gl_buildCalendarTime_(endIso)
+      };
+
+      if (normalizedColor) {
+        calendarEvent.colorId = normalizedColor;
+      }
+
+      if (ev.location) {
+        calendarEvent.location = ev.location;
+      }
+
+      var calendarReminders = _gl_buildCalendarReminders_(remindersInfo.overrides);
+      if (calendarReminders) {
+        calendarEvent.reminders = calendarReminders;
+      }
+
+      var insertedEvent = Calendar.Events.insert(calendarEvent, calendarId);
+      var appliedColor = insertedEvent.colorId || normalizedColor || "";
+      if (appliedColor) {
+        appliedColor = _gl_normalizeColorId_(appliedColor, appliedColor);
+        ev.colorId = appliedColor;
+        ev.color_id = appliedColor;
+      }
+      ev.calendar_event_id = insertedEvent.id;
+      var calRes = { eventId: insertedEvent.id, action: "created" };
+
+      // === Notion ===
+      var notionRes = null;
+      if (token && dbId) {
+        notionRes = _gl_upsertNotionPage_(ev, token, dbId, appliedColor, reminderTexts, notionSchema, notionLookupCache);
+        if (notionRes && notionRes.id) {
+          ev.notion_page_id = notionRes.id;
+        }
+      }
+
+      results.push({
+        externalId: ev.external_id,
+        calendar: calRes,
+        notion: notionRes ? { pageId: notionRes.id, action: notionRes.action } : null
+      });
+    }
+    );
+    // === Google Sheets ===
+    gl_gs_upsert(dic);
+
+    return { ok: true, results: results };
   }
 
-  if (status < 200 || status >= 300) {
-    throw new Error("Notion API error (" + status + "): " + text);
+  function _gl_buildCalendarTime_(isoString) {
+    if (!isoString) return null;
+    var isDateOnly = isoString.length <= 10 || (isoString.indexOf("T") === -1);
+    if (isDateOnly) {
+      return { date: isoString.substring(0, 10) };
+    }
+    return { dateTime: isoString };
   }
 
-  var parsed = JSON.parse(text);
-  var results = parsed && parsed.results ? parsed.results : [];
-  var pageId = (results && results.length) ? (results[0].id || "") : "";
+  function _gl_upsertNotionPage_(ev, token, dbId, colorValue, reminderTexts, notionSchema, notionLookupCache) {
+    var externalId = ev.external_id || "";
+    var colorText = colorValue ? String(colorValue) : "";
+    var remindersArray = Array.isArray(reminderTexts) ? reminderTexts : [];
 
-  if (cache) {
-    cache[cacheKey] = pageId || "";
+    var pageId = ev.notion_page_id || ev.notionPageId || "";
+    if (!pageId && externalId) {
+      pageId = _gl_resolveNotionPageIdByExternalId_(token, dbId, notionSchema, externalId, notionLookupCache) || "";
+      if (pageId) {
+        ev.notion_page_id = pageId;
+        ev.notionPageId = pageId;
+      }
+    }
+
+    var nameProperty = _gl_findNotionPropertyInfo_(notionSchema, "Name");
+    var startProperty = _gl_findNotionPropertyInfo_(notionSchema, "Start");
+    var endProperty = _gl_findNotionPropertyInfo_(notionSchema, "End");
+    var externalProperty = _gl_findNotionPropertyInfo_(notionSchema, "ExternalID");
+
+    var props = {};
+    var nameKey = nameProperty ? nameProperty.name : "Name";
+    props[nameKey] = { "title": _gl_makeRichTextArray_(ev.title) };
+
+    var startKey = startProperty ? startProperty.name : "Start";
+    props[startKey] = { "date": { "start": ev.start, "end": ev.end || null } };
+
+    var externalKey = externalProperty ? externalProperty.name : "ExternalID";
+    props[externalKey] = { "rich_text": externalId ? _gl_makeRichTextArray_(externalId) : [] };
+
+    if (ev.end) {
+      var endKey = endProperty ? endProperty.name : "End";
+      props[endKey] = { "date": { "start": ev.end } };
+    }
+
+    var path = pageId ? "/pages/" + pageId : "/pages";
+    var method = pageId ? "patch" : "post";
+    var body = pageId ? { properties: props } : { parent: { database_id: dbId }, properties: props };
+
+    _gl_assignColorProperty_(props, notionSchema, colorText);
+    _gl_assignRemindersProperty_(props, notionSchema, remindersArray);
+
+    // Manteniamo il nome `resp` usato storicamente
+    resp = UrlFetchApp.fetch("https://api.notion.com/v1" + path, {
+      method: method,
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json"
+      },
+      muteHttpExceptions: true,
+      payload: JSON.stringify(body)
+    });
+
+    var notionResp = resp;
+    var status = notionResp.getResponseCode();
+    var text = notionResp.getContentText();
+    
+    if (status === 401) {
+      var unauthorizedMessage = text;
+      try { var unauthorizedParsed = JSON.parse(text); if (unauthorizedParsed && unauthorizedParsed.message) { unauthorizedMessage = unauthorizedParsed.message; } } catch (_) {}
+      throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error("Notion API error (" + status + "): " + text);
+    }
+
+    var parsed = JSON.parse(text);
+    parsed.action = pageId ? "updated" : "created";
+    return parsed;
   }
 
-  return pageId || "";
-}
+  var _gl_cachedNotionSchemas_ = {};
 
-function _gl_buildNotionFilterForExternalId_(schema, externalId) {
-  var trimmed = String(externalId || "").trim();
-  if (!trimmed) return null;
+  function _gl_getNotionDbSchema_(token, dbId) {
+    if (_gl_cachedNotionSchemas_[dbId]) {
+      return _gl_cachedNotionSchemas_[dbId];
+    }
+    
+    resp = UrlFetchApp.fetch("https://api.notion.com/v1/databases/" + dbId, {
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Notion-Version": "2022-06-28"
+      },
+      muteHttpExceptions: true
+    });
 
-  var info = _gl_findNotionPropertyInfo_(schema, "ExternalID");
-  var key = info ? info.name : "ExternalID";
-  var def = info ? info.definition : null;
-  var type = def && def.type ? def.type : "rich_text";
+    var notionResp = resp;
+    var status = notionResp.getResponseCode();
+    var text = notionResp.getContentText();
 
-  if (type === "title") {
-    return { property: key, title: { equals: trimmed } };
+    if (status === 401) {
+      var unauthorizedMessage = text;
+      try { var unauthorizedParsed = JSON.parse(text); if (unauthorizedParsed && unauthorizedParsed.message) { unauthorizedMessage = unauthorizedParsed.message; } } catch (_) {}
+      throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error("Notion API error (" + status + "): " + text);
+    }
+
+    var parsed = JSON.parse(text);
+    _gl_cachedNotionSchemas_[dbId] = parsed;
+    return parsed;
   }
 
-  if (type === "rich_text") {
+  function _gl_normalizePropertyName_(name) {
+    return String(name || "")
+      .toLowerCase()
+      .replace(/[\s_\-]+/g, "");
+  }
+
+  function _gl_findNotionPropertyInfo_(schema, targetName) {
+    if (!schema || !schema.properties) return null;
+    if (schema.properties[targetName]) {
+      return { name: targetName, definition: schema.properties[targetName] };
+    }
+
+    var lowerTarget = String(targetName).toLowerCase();
+    var normalizedTarget = _gl_normalizePropertyName_(targetName);
+
+    for (var key in schema.properties) {
+      if (!schema.properties.hasOwnProperty(key)) continue;
+      var def = schema.properties[key];
+      if (String(key).toLowerCase() === lowerTarget) {
+        return { name: key, definition: def };
+      }
+      if (_gl_normalizePropertyName_(key) === normalizedTarget) {
+        return { name: key, definition: def };
+      }
+    }
+    return null;
+  }
+
+  function _gl_makeRichTextArray_(value) {
+    var text = String(value || "");
+    if (!text) return [];
+    return [{ type: "text", text: { content: text } }];
+  }
+
+  function _gl_assignColorProperty_(props, schema, colorValue) {
+    var info = _gl_findNotionPropertyInfo_(schema, "colorId");
+    var key = info ? info.name : "colorId";
+    var def = info ? info.definition : null;
+    var hasValue = colorValue !== null && colorValue !== undefined && String(colorValue).trim() !== "";
+    var stringValue = hasValue ? String(colorValue).trim() : "";
+
+    if (def && def.type === "number") {
+      var num = hasValue ? Number(stringValue) : null;
+      if (hasValue && isNaN(num)) { num = null; }
+      props[key] = { number: num };
+      return;
+    }
+    if (def && def.type === "select") {
+      props[key] = hasValue ? { select: { name: stringValue } } : { select: null };
+      return;
+    }
+    if (def && def.type === "multi_select") {
+      props[key] = hasValue ? { multi_select: [{ name: stringValue }] } : { multi_select: [] };
+      return;
+    }
+    props[key] = hasValue ? { rich_text: _gl_makeRichTextArray_(stringValue) } : { rich_text: [] };
+  }
+
+  function _gl_assignRemindersProperty_(props, schema, reminders) {
+    var info = _gl_findNotionPropertyInfo_(schema, "reminders");
+    var key = info ? info.name : "reminders";
+    var def = info ? info.definition : null;
+    var values = Array.isArray(reminders) ? reminders.filter(function(item){
+      return item !== null && item !== undefined && String(item).trim() !== "";
+    }) : [];
+
+    if (def && def.type === "multi_select") {
+      props[key] = { multi_select: values.map(function(val){ return { name: String(val) }; }) };
+      return;
+    }
+    if (def && def.type === "select") {
+      var first = values.length ? String(values[0]) : "";
+      props[key] = first ? { select: { name: first } } : { select: null };
+      return;
+    }
+    if (def && def.type === "number") {
+      if (values.length) {
+        var candidate = Number(values[0]);
+        props[key] = { number: isNaN(candidate) ? null : candidate };
+      } else {
+        props[key] = { number: null };
+      }
+      return;
+    }
+    props[key] = values.length ? { rich_text: _gl_makeRichTextArray_(values.join(", ")) } : { rich_text: [] };
+  }
+
+  function _gl_resolveNotionPageIdByExternalId_(token, dbId, schema, externalId, cache) {
+    if (!externalId) return "";
+
+    var cacheKey = String(externalId);
+    if (cache && Object.prototype.hasOwnProperty.call(cache, cacheKey)) {
+      return cache[cacheKey] || "";
+    }
+
+    var filter = _gl_buildNotionFilterForExternalId_(schema, externalId);
+    if (!filter) {
+      if (cache) cache[cacheKey] = "";
+      return "";
+    }
+
+    resp = UrlFetchApp.fetch("https://api.notion.com/v1/databases/" + dbId + "/query", {
+      method: "post",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json"
+      },
+      muteHttpExceptions: true,
+      payload: JSON.stringify({ filter: filter, page_size: 1 })
+    });
+
+    var notionResp = resp;
+    var status = notionResp.getResponseCode();
+    var text = notionResp.getContentText();
+
+    if (status === 401) {
+      var unauthorizedMessage = text;
+      try { var unauthorizedParsed = JSON.parse(text); if (unauthorizedParsed && unauthorizedParsed.message) { unauthorizedMessage = unauthorizedParsed.message; } } catch (_) {}
+      throw new Error("Notion API unauthorized (401). Verifica NOTION_TOKEN e NOTION_DB_ID. Dettagli: " + unauthorizedMessage);
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error("Notion API error (" + status + "): " + text);
+    }
+
+    var parsed = JSON.parse(text);
+    var results = parsed && parsed.results ? parsed.results : [];
+    var pageId = (results && results.length) ? (results[0].id || "") : "";
+
+    if (cache) {
+      cache[cacheKey] = pageId || "";
+    }
+
+    return pageId || "";
+  }
+
+  function _gl_buildNotionFilterForExternalId_(schema, externalId) {
+    var trimmed = String(externalId || "").trim();
+    if (!trimmed) return null;
+
+    var info = _gl_findNotionPropertyInfo_(schema, "ExternalID");
+    var key = info ? info.name : "ExternalID";
+    var def = info ? info.definition : null;
+    var type = def && def.type ? def.type : "rich_text";
+
+    if (type === "title") { return { property: key, title: { equals: trimmed } }; }
+    if (type === "rich_text") { return { property: key, rich_text: { equals: trimmed } }; }
+    if (type === "number") {
+      var numeric = Number(trimmed);
+      if (isNaN(numeric)) return null;
+      return { property: key, number: { equals: numeric } };
+    }
+    if (type === "select") { return { property: key, select: { equals: trimmed } }; }
+    if (type === "multi_select") { return { property: key, multi_select: { contains: trimmed } }; }
+    if (type === "unique_id") {
+      var uniqueNumeric = Number(trimmed);
+      if (isNaN(uniqueNumeric)) return null;
+      return { property: key, unique_id: { equals: uniqueNumeric } };
+    }
+    if (type === "url") { return { property: key, url: { equals: trimmed } }; }
+    if (type === "email") { return { property: key, email: { equals: trimmed } }; }
+
     return { property: key, rich_text: { equals: trimmed } };
   }
 
-  if (type === "number") {
-    var numeric = Number(trimmed);
-    if (isNaN(numeric)) return null;
-    return { property: key, number: { equals: numeric } };
-  }
-
-  if (type === "select") {
-    return { property: key, select: { equals: trimmed } };
-  }
-
-  if (type === "multi_select") {
-    return { property: key, multi_select: { contains: trimmed } };
-  }
-
-  if (type === "unique_id") {
-    var uniqueNumeric = Number(trimmed);
-    if (isNaN(uniqueNumeric)) return null;
-    return { property: key, unique_id: { equals: uniqueNumeric } };
-  }
-
-  if (type === "url") {
-    return { property: key, url: { equals: trimmed } };
-  }
-
-  if (type === "email") {
-    return { property: key, email: { equals: trimmed } };
-  }
-
-  return { property: key, rich_text: { equals: trimmed } };
-}
-
-function _gl_normalizeColorId_(primaryValue, fallbackValue) {
-  var value = primaryValue;
-  if (value === null || value === undefined || String(value).trim() === "") {
-    value = fallbackValue;
-  }
-  if (value === null || value === undefined) return "";
-  var stringValue = String(value).trim();
-  if (!stringValue) return "";
-  if (!isNaN(Number(stringValue))) {
-    var numeric = Number(stringValue);
-    if (!isNaN(numeric)) {
-      return String(Math.floor(numeric));
+  function _gl_normalizeColorId_(primaryValue, fallbackValue) {
+    var value = primaryValue;
+    if (value === null || value === undefined || String(value).trim() === "") {
+      value = fallbackValue;
     }
-  }
-  return stringValue;
-}
-
-function _gl_parseReminders_(input) {
-  var rawItems = [];
-  if (Array.isArray(input)) {
-    rawItems = input;
-  } else if (input !== undefined && input !== null) {
-    if (typeof input === "string") {
-      var trimmed = input.trim();
-      if (trimmed) {
-        if (trimmed[0] === "[" && trimmed[trimmed.length - 1] === "]") {
-          try {
-            var parsed = JSON.parse(trimmed);
-            if (Array.isArray(parsed)) {
-              rawItems = parsed;
-            } else {
-              rawItems = [trimmed];
-            }
-          } catch (_) {
-            rawItems = [trimmed];
-          }
-        } else if (trimmed.indexOf(",") > -1) {
-          rawItems = trimmed.split(",");
-        } else {
-          rawItems = [trimmed];
-        }
+    if (value === null || value === undefined) return "";
+    var stringValue = String(value).trim();
+    if (!stringValue) return "";
+    if (!isNaN(Number(stringValue))) {
+      var numeric = Number(stringValue);
+      if (!isNaN(numeric)) {
+        return String(Math.floor(numeric));
       }
-    } else {
-      rawItems = [input];
     }
+    return stringValue;
   }
 
-  var overrides = [];
-  var texts = [];
-  var values = [];
-
-  rawItems.forEach(function(item) {
-    if (item === null || item === undefined) return;
-
-    var method = "popup";
-    var minutes = null;
-    var textValue = "";
-    var storedValue = null;
-
-    if (typeof item === "number") {
-      if (!isNaN(item)) {
-        minutes = Math.max(0, Math.round(item));
-        textValue = String(minutes);
-        storedValue = minutes;
-      }
-    } else if (typeof item === "string") {
-      var trimmed = item.trim();
-      if (!trimmed) return;
-      textValue = trimmed;
-
-      var colon = trimmed.indexOf(":");
-      if (colon > -1) {
-        var methodPart = trimmed.substring(0, colon).trim().toLowerCase();
-        var valuePart = trimmed.substring(colon + 1).trim();
-        var parsedMinutes = parseInt(valuePart, 10);
-        if (!isNaN(parsedMinutes)) {
-          minutes = Math.max(0, parsedMinutes);
-          if (methodPart === "email" || methodPart === "popup") {
-            method = methodPart;
-          }
+  function _gl_parseReminders_(input) {
+    var rawItems = [];
+    if (Array.isArray(input)) {
+      rawItems = input;
+    } else if (input !== undefined && input !== null) {
+      if (typeof input === "string") {
+        var trimmed = input.trim();
+        if (trimmed) {
+          if (trimmed[0] === "[" && trimmed[trimmed.length - 1] === "]") {
+            try {
+              var parsed = JSON.parse(trimmed);
+              if (Array.isArray(parsed)) { rawItems = parsed; } else { rawItems = [trimmed]; }
+            } catch (_) { rawItems = [trimmed]; }
+          } else if (trimmed.indexOf(",") > -1) {
+            rawItems = trimmed.split(",");
+          } else { rawItems = [trimmed]; }
         }
-        storedValue = trimmed;
-      }
+      } else { rawItems = [input]; }
+    }
 
-      if (minutes === null) {
-        var numeric = parseInt(trimmed, 10);
-        if (!isNaN(numeric)) {
-          minutes = Math.max(0, numeric);
+    var overrides = [];
+    var texts = [];
+    var values = [];
+
+    rawItems.forEach(function(item) {
+      if (item === null || item === undefined) return;
+
+      var method = "popup";
+      var minutes = null;
+      var textValue = "";
+      var storedValue = null;
+
+      if (typeof item === "number") {
+        if (!isNaN(item)) {
+          minutes = Math.max(0, Math.round(item));
+          textValue = String(minutes);
           storedValue = minutes;
         }
-      }
+      } else if (typeof item === "string") {
+        var trimmed = item.trim();
+        if (!trimmed) return;
+        textValue = trimmed;
 
-      if (storedValue === null) {
-        storedValue = trimmed;
-      }
-    } else if (typeof item === "object") {
-      var objMethod = item.method ? String(item.method).toLowerCase() : "popup";
-      var objMinutes = item.minutes;
-      if (typeof objMinutes === "number" && !isNaN(objMinutes)) {
-        minutes = Math.max(0, Math.round(objMinutes));
-        if (objMethod === "email" || objMethod === "popup") {
-          method = objMethod;
+        var colon = trimmed.indexOf(":");
+        if (colon > -1) {
+          var methodPart = trimmed.substring(0, colon).trim().toLowerCase();
+          var valuePart = trimmed.substring(colon + 1).trim();
+          var parsedMinutes = parseInt(valuePart, 10);
+          if (!isNaN(parsedMinutes)) {
+            minutes = Math.max(0, parsedMinutes);
+            if (methodPart === "email" || methodPart === "popup") { method = methodPart; }
+          }
+          storedValue = trimmed;
         }
-        textValue = objMethod + ":" + minutes;
-        storedValue = textValue;
+        if (minutes === null) {
+          var numeric = parseInt(trimmed, 10);
+          if (!isNaN(numeric)) { minutes = Math.max(0, numeric); storedValue = minutes; }
+        }
+        if (storedValue === null) { storedValue = trimmed; }
+      } else if (typeof item === "object") {
+        var objMethod = item.method ? String(item.method).toLowerCase() : "popup";
+        var objMinutes = item.minutes;
+        if (typeof objMinutes === "number" && !isNaN(objMinutes)) {
+          minutes = Math.max(0, Math.round(objMinutes));
+          if (objMethod === "email" || objMethod === "popup") { method = objMethod; }
+          textValue = objMethod + ":" + minutes;
+          storedValue = textValue;
+        }
       }
-    }
 
-    if (textValue) {
-      texts.push(textValue);
-    }
-
-    if (storedValue !== null) {
-      values.push(storedValue);
-    } else if (textValue) {
-      values.push(textValue);
-    }
-
-    if (minutes !== null) {
-      overrides.push({ method: method, minutes: minutes });
-    }
-  });
-
-  return { overrides: overrides, texts: texts, values: values };
-}
-
-function _gl_buildCalendarReminders_(overrides) {
-  if (!overrides || !overrides.length) return null;
-  return { useDefault: false, overrides: overrides };
-}
-
-
-function _simpleHtmlEscape(text) {
-  if (text === null || text === undefined) return "";
-  var str = String(text);
-  
-  return str.replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-}
-
-function test_local() {
-  var base = new Date();
-  var events = [];
-
-  for (var i = 0; i < 3; i++) {
-    var start = new Date(base.getTime() + (i + 1) * 30 * 60000);
-    var end   = new Date(start.getTime() + 30 * 60000);
-    events.push({
-      title: "Test Event " + (i + 1),
-      start: start.toISOString(),
-      end:   end.toISOString(),
-      external_id: "local_" + Utilities.getUuid().slice(0, 8)
+      if (textValue) { texts.push(textValue); }
+      if (storedValue !== null) { values.push(storedValue); } 
+      else if (textValue) { values.push(textValue); }
+      if (minutes !== null) { overrides.push({ method: method, minutes: minutes }); }
     });
+    return { overrides: overrides, texts: texts, values: values };
   }
 
-  var dic = { events: events };
-  var res = sendGlando(dic);
-  Logger.log(JSON.stringify(res, null, 2));
-  return res;
-}
+  function _gl_buildCalendarReminders_(overrides) {
+    if (!overrides || !overrides.length) return null;
+    return { useDefault: false, overrides: overrides };
+  }
+  
+  
+  // =================================================================
+  // ESPOSIZIONE FUNZIONI PUBBLICHE
+  // =================================================================
+  
+  return {
+    handleUIUpload: handleUIUpload,
+    sendGlando: sendGlando
+  };
+
+})();
