@@ -1,15 +1,11 @@
 function sendSeendo(imageUrl) {
-  var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY non configurata.");
-  }
-
-  // Non ci sono più photoData, Base64, o MIME type.
-  // Solo l'URL.
+  
+  // --- SELETTORE MODELLO ---
+  var model = 'g'; 
+  // -------------------------
 
   var systemPrompt = "Sei un assistente OCR esperto di agende Moleskine. " +
     "Devi restituire solo JSON valido seguendo le istruzioni.";
-
   var userPrompt = [
     "Trascrivi gli eventi presenti nella foto di un'agenda settimanale Moleskine standard.",
     "Ogni evento deve essere trasformato in un oggetto JSON con almeno questi campi:",
@@ -28,71 +24,127 @@ function sendSeendo(imageUrl) {
     "Non aggiungere testo extra fuori dal JSON."
   ].join('\n');
 
-  var payload = {
-    model: 'gpt-5',
-    temperature: 1,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: userPrompt },
+  var responseText;
+  var statusCode;
+  var response;
+
+  try {
+    if (model === 'o') {
+      // --- LOGICA OPENAI (invariata) ---
+      Logger.log("Utilizzo di OpenAI (model 'o')...");
+      var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+      if (!apiKey) { throw new Error("OPENAI_API_KEY non configurata."); }
+      var payload = {
+        model: 'gpt-4o',
+        temperature: 1,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
           {
-            type: 'image_url',
-            image_url: {
-              // --- ECCO LA MAGIA ---
-              url: imageUrl // Passiamo l'URL pubblico
-            }
+            role: 'user',
+            content: [
+              { type: 'text', text: userPrompt },
+              { type: 'image_url', image_url: { url: imageUrl } }
+            ]
           }
         ]
+      };
+      response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + apiKey },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
+      responseText = response.getContentText();
+      statusCode = response.getResponseCode();
+      if (statusCode < 200 || statusCode >= 300) {
+        throw new Error("OpenAI ha risposto con stato " + statusCode + ": " + responseText);
       }
-    ]
-  };
+      var data = JSON.parse(responseText);
+      if (!data.choices || !data.choices.length || !data.choices[0].message) {
+        throw new Error("Risposta OpenAI senza contenuto utile.");
+      }
+      var content = data.choices[0].message.content;
+      return content.trim(); 
 
-  var response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Authorization: 'Bearer ' + apiKey
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-  
-  // Il resto della funzione (gestione risposta, parsing) è identico a prima
-  var responseText = response.getContentText();
-  var statusCode = response.getResponseCode();
-  if (statusCode < 200 || statusCode >= 300) {
-    throw new Error("OpenAI ha risposto con stato " + statusCode + ": " + responseText);
-  }
+    } else if (model === 'g') {
+      // --- LOGICA GEMINI (OCR IMMAGINE) ---
+      Logger.log("Utilizzo di Gemini (gemini-2.5-flash)...");
+      var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+      if (!apiKey) { throw new Error("GEMINI_API_KEY non configurata."); }
+      
+      var imageBlob = UrlFetchApp.fetch(imageUrl).getBlob();
+      var base64Data = Utilities.base64Encode(imageBlob.getBytes());
+      var mimeType = imageBlob.getContentType();
 
-  var data;
-  try {
-    data = JSON.parse(responseText);
-  } catch (err) {
-    throw new Error("Risposta OpenAI non valida: " + responseText);
-  }
+      // *** ECCO LA CORREZIONE ***
+      // Se il server non fornisce un MIME type (solo 'octet-stream'),
+      // forziamo 'image/jpeg', che è quello che Gemini si aspetta.
+      if (mimeType === "application/octet-stream") {
+        Logger.log("MIME type 'application/octet-stream' rilevato. Conversione forzata a 'image/jpeg'.");
+        mimeType = "image/jpeg";
+      }
+      // *** FINE CORREZIONE ***
 
-  if (!data.choices || !data.choices.length || !data.choices[0].message) {
-    throw new Error("Risposta OpenAI senza contenuto utile.");
-  }
+      var fullPrompt = systemPrompt + "\n\n" + userPrompt;
 
-  var content = data.choices[0].message.content;
-  if (typeof content === 'string') {
-    return content.trim();
-  }
+      var geminiPayload = {
+        "contents": [
+          {
+            "parts": [
+              { "text": fullPrompt },
+              {
+                "inlineData": {
+                  "mimeType": mimeType, // Ora mimeType è corretto
+                  "data": base64Data
+                }
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "responseMimeType": "application/json", 
+          "temperature": 1.0 
+        }
+      };
 
-  if (Array.isArray(content)) {
-    var parts = content.map(function(item) {
-      return typeof item === 'string' ? item : (item && item.text ? item.text : '');
-    }).join('').trim();
-    if (parts) {
-      return parts;
+      var modelName = "gemini-2.5-flash"; 
+      var url = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey;
+
+      response = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(geminiPayload),
+        muteHttpExceptions: true
+      });
+
+      responseText = response.getContentText();
+      statusCode = response.getResponseCode();
+
+      if (statusCode < 200 || statusCode >= 300) {
+        throw new Error("Gemini (OCR) ha risposto con stato " + statusCode + ": " + responseText);
+      }
+
+      var geminiData = JSON.parse(responseText);
+      if (!geminiData.candidates || !geminiData.candidates.length || !geminiData.candidates[0].content) {
+        if (geminiData.promptFeedback && geminiData.promptFeedback.blockReason) {
+            throw new Error("Richiesta bloccata da Gemini per: " + geminiData.promptFeedback.blockReason);
+        }
+        throw new Error("Risposta Gemini senza contenuto utile: " + responseText);
+      }
+      
+      var geminiContent = geminiData.candidates[0].content.parts[0].text;
+      return geminiContent.trim();
+
+    } else {
+      throw new Error("Valore 'model' non valido. Usare 'o' o 'g'.");
     }
-  }
 
-  throw new Error("Impossibile interpretare la risposta OpenAI.");
+  } catch (err) {
+    Logger.log("Errore in sendSeendo: " + err.message);
+    throw err;
+  }
 }
 
 function _downloadTelegramPhotoAsBase64(fileId) {
@@ -113,65 +165,104 @@ function _downloadTelegramPhotoAsBase64(fileId) {
 }
 
 function sendSeendo_check() {
-  var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY non configurata nelle proprietà dello script.");
-  }
+  
+  // --- SELETTORE MODELLO ---
+  // Imposta il modello da TESTARE: 'o' = OpenAI, 'g' = Gemini
+  var model = 'g'; 
+  // -------------------------
 
-  var payload = {
-    model: 'gpt-4o-mini',
-    temperature: 0,
-    response_format: { type: 'json_object' },
-    messages: [
-      // MODIFICA 1: Specifica JSON nel system prompt
-      { role: 'system', content: 'Sei un assistente di diagnostica. Rispondi solo in formato JSON.' },
-      {
-        role: 'user',
-        content: [
-          // MODIFICA 2: Richiedi un output JSON
-          { type: 'text', text: 'Rispondi con un oggetto JSON: {"status": "ok"}' }
-        ]
-      }
-    ]
-  };
+  var response;
+  var responseText;
+  var statusCode;
 
-  var response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Authorization: 'Bearer ' + apiKey
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-
-  var responseText = response.getContentText();
-  var statusCode = response.getResponseCode();
-  if (statusCode < 200 || statusCode >= 300) {
-    throw new Error("OpenAI ha risposto con stato " + statusCode + ": " + responseText);
-  }
-
-  var data;
   try {
-    data = JSON.parse(responseText);
-  } catch (err) {
-    throw new Error("Risposta OpenAI non valida: " + responseText);
-  }
+    if (model === 'o') {
+      // --- TEST OPENAI (invariato) ---
+      Logger.log("Esecuzione check su OpenAI...");
+      var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+      if (!apiKey) { throw new Error("OPENAI_API_KEY non configurata."); }
+      var payload = {
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: 'Sei un assistente di diagnostica. Rispondi solo in formato JSON.' },
+          { role: 'user', content: [{ type: 'text', text: 'Rispondi con un oggetto JSON: {"status": "ok", "service": "openai"}' }] }
+        ]
+      };
+      response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + apiKey },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
+      responseText = response.getContentText();
+      statusCode = response.getResponseCode();
+      if (statusCode < 200 || statusCode >= 300) {
+        throw new Error("OpenAI (check) ha risposto con stato " + statusCode + ": " + responseText);
+      }
+      var data = JSON.parse(responseText);
+      var content = data.choices[0].message.content;
+      Logger.log("Risposta OpenAI OK: " + content);
+      return content.trim();
 
-  if (!data.choices || !data.choices.length || !data.choices[0].message) {
-    throw new Error("Risposta OpenAI senza contenuto utile.");
-  }
+    } else if (model === 'g') {
+      // --- TEST GEMINI (SOLO TESTO) ---
+      Logger.log("Esecuzione check su Gemini (gemini-2.5-flash)...");
+      var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+      if (!apiKey) { throw new Error("GEMINI_API_KEY non configurata."); }
 
-  var content = data.choices[0].message.content;
-  
-  // Il test ora dovrebbe restituire un oggetto JSON come stringa
-  Logger.log("Risposta da sendSeendo_check: " + content);
-  
-  if (typeof content === 'string') {
-    return content.trim(); // E.g., "{\"status\": \"ok\"}"
-  }
+      var geminiPayload = {
+        "contents": [
+          {
+            "parts": [
+              { "text": "Sei un assistente di diagnostica. Rispondi solo in formato JSON. Rispondi con un oggetto JSON: {\"status\": \"ok\", \"service\": \"gemini\"}" }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "responseMimeType": "application/json", // Questi modelli lo supportano!
+          "temperature": 0.0
+        }
+      };
+      
+      // *** MODELLO CORRETTO DALLA TUA LISTA ***
+      var modelName = "gemini-2.5-flash"; 
+      var url = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey;
 
-  // ... (il resto della logica di parsing è ok)
-  
-  throw new Error("Impossibile interpretare la risposta OpenAI.");
+      response = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(geminiPayload),
+        muteHttpExceptions: true
+      });
+
+      responseText = response.getContentText();
+      statusCode = response.getResponseCode();
+
+      if (statusCode < 200 || statusCode >= 300) {
+        throw new Error("Gemini (check) ha risposto con stato " + statusCode + ": " + responseText);
+      }
+
+      var geminiData = JSON.parse(responseText);
+      if (!geminiData.candidates || !geminiData.candidates.length || !geminiData.candidates[0].content) {
+         if (geminiData.promptFeedback && geminiData.promptFeedback.blockReason) {
+            throw new Error("Richiesta bloccata da Gemini per: " + geminiData.promptFeedback.blockReason);
+        }
+        throw new Error("Risposta Gemini (check) senza contenuto utile: " + responseText);
+      }
+      var geminiContent = geminiData.candidates[0].content.parts[0].text;
+      
+      Logger.log("Risposta Gemini OK: " + geminiContent);
+      return geminiContent.trim();
+    
+    } else {
+      throw new Error("Valore 'model' non valido. Usare 'o' o 'g'.");
+    }
+
+  } catch (e) {
+    Logger.log("Errore in sendSeendo_check: " + e.message);
+    throw e;
+  }
 }
