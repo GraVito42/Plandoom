@@ -34,30 +34,19 @@ var Plando = (function() {
       return ContentService.createTextOutput(JSON.stringify({ ok: true, info: "No chat_id" })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    try {
-      var text = _extractTextCandidate(message);
-      var document = _extractDocumentCandidate(message);
-      var photo = _extractPhotoCandidate(message);
+    var text = _extractTextCandidate(message);
+    var document = _extractDocumentCandidate(message);
+    var photo = _extractPhotoCandidate(message);
 
-      if (photo) {
-        _handlePhoto(chat_id, photo);
-      } else if (document) {
-        _handleDocument(chat_id, document, message.caption);
-      } else if (text) {
-        _handleText(chat_id, text);
-      } else {
-        // Messaggio non gestito (es. sticker)
-        // sendMessage(chat_id, "ℹ️ Tipo di messaggio non supportato.");
-      }
-
-    } catch (err) {
-      console.error("Errore in Plando.handleTelegramPost: " + err.message, err.stack);
-      try {
-        // Tenta di inviare l'errore all'utente
-        sendMessage(chat_id, "❌ Si è verificato un errore critico: " + err.message);
-      } catch (sendErr) {
-        console.error("Impossibile inviare il messaggio di errore: " + sendErr.message);
-      }
+    if (photo) {
+      _handlePhoto(chat_id, photo);
+    } else if (document) {
+      _handleDocument(chat_id, document, message.caption);
+    } else if (text) {
+      _handleText(chat_id, text);
+    } else {
+      // Messaggio non gestito (es. sticker)
+      // sendMessage(chat_id, "ℹ️ Tipo di messaggio non supportato.");
     }
     
     // Rispondi a Telegram che l'update è stato ricevuto e processato.
