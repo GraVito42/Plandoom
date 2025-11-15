@@ -802,7 +802,7 @@
         const file = fileInput.files[0];
 
         if (!file) {
-          updateStatus('Per favore, seleziona un file.', 'error');
+          updateStatus('Please choose a file first.', 'error');
           return;
         }
 
@@ -810,7 +810,7 @@
         const locale = document.getElementById('locale').value;
         const button = document.getElementById('submit-button');
         button.disabled = true;
-        updateStatus('Caricamento file in corso...', 'loading');
+        updateStatus('Uploading through the bridge...', 'loading');
 
         const reader = new FileReader();
 
@@ -843,7 +843,7 @@
           };
           reader.readAsDataURL(file);
         } else {
-          showError(new Error('Tipo file non supportato. Seleziona .jpg, .png o .json.'));
+          showError(new Error('Unsupported file type. Please pick .jpg, .png, or .json.'));
           button.disabled = false;
         }
       }
@@ -855,7 +855,7 @@
       }
 
       function showError(err) {
-        updateStatus('Errore: ' + err.message, 'error');
+        updateStatus('Error: ' + err.message, 'error');
         document.getElementById('submit-button').disabled = false;
       }
 
