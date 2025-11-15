@@ -28,5 +28,6 @@ function doPost(e) {
  */
 function processUpload(formObject) {
   // Delega tutta la gestione al modulo Glando
+  // (Assicurati che Glando.gs esista e abbia questa funzione)
   return Glando.handleUIUpload(formObject);
 }
