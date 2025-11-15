@@ -15,6 +15,10 @@
         --muted: rgba(255, 255, 255, 0.6);
         --card: rgba(11, 18, 34, 0.85);
         --border: rgba(255, 255, 255, 0.12);
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f9f9f9;
       }
 
       * {
@@ -70,10 +74,6 @@
         font-weight: 600;
         letter-spacing: 0.05em;
         border: 1px solid rgba(255, 255, 255, 0.15);
-      }
-
-      .pill-button[data-active='true'] {
-        box-shadow: 0 0 0 2px rgba(165, 240, 255, 0.35);
       }
 
       .pill-button.secondary {
@@ -449,95 +449,94 @@
       <header class="top-nav">
         <div class="logo">Webapp Planner Bridge</div>
         <div class="nav-actions">
-          <button class="pill-button secondary" data-nav="view-home" data-active="true" aria-pressed="true">Portal</button>
-          <button class="pill-button" data-nav="view-upload" data-active="false" aria-pressed="false">Upload Chimera</button>
-          <button class="pill-button" data-nav="view-optimize" data-active="false" aria-pressed="false">Observatory</button>
+          <button class="pill-button secondary" data-nav="view-home">Main</button>
+          <button class="pill-button" data-nav="view-upload">Summon Plando</button>
+          <button class="pill-button" data-nav="view-optimize">Enter Observatory</button>
         </div>
       </header>
 
       <main>
         <section id="view-home" class="view active">
           <div class="hero">
-            <h1>Cross the bridge between raw ideas and a living calendar.</h1>
+            <h1>Cross the mysterious bridge between plans and reality.</h1>
             <p>
-              Upload arcane agendas, inspect productivity rituals, and let the Plandoom spirits rearrange every
-              event while honoring work, rest, and care.
+              Upload arcane agendas, study your productivity rituals, and let the Plandoom spirits forge
+              an optimized calendar that respects both work and rest.
             </p>
             <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
-              <button class="pill-button" data-nav="view-upload">Begin the upload rite</button>
-              <button class="pill-button secondary" data-nav="view-optimize">Consult the oracle</button>
+              <button class="pill-button" data-nav="view-upload">Begin the Upload Rite</button>
+              <button class="pill-button secondary" data-nav="view-optimize">Consult the Oracle</button>
             </div>
           </div>
 
           <div class="card-grid">
             <article class="card">
-              <h3>Plando's Gate</h3>
+              <h3>The Plando Gate</h3>
               <p>
-                Guide JSON files or agenda photos through Plando's shapeshifting journey and dispatch the events to
-                Calendar, Notion, or Google Sheets.
+                Guide JSON files or agenda photos through Plando’s shapeshifting journey and push the events into
+                Calendar, Notion, or Sheets.
               </p>
               <div class="character-stack">
                 <div class="character-card">
                   <div class="character-avatar"></div>
                   <div>
                     <strong>Plando · Sentinel Form</strong>
-                    <p style="margin:6px 0 0;">Jagged body, notebook head. Guardianship over every file.</p>
+                    <p style="margin:6px 0 0;">Jagged body, notebook mind. Guards every upload.</p>
                   </div>
                 </div>
                 <div class="character-card">
                   <div class="character-avatar"></div>
                   <div>
                     <strong>Plando · Abyssal Form</strong>
-                    <p style="margin:6px 0 0;">Tentacles transcribe handwriting and decipher data.</p>
+                    <p style="margin:6px 0 0;">Tentacles wrap each task, decoding handwriting and data.</p>
                   </div>
                 </div>
                 <div class="character-card">
                   <div class="character-avatar"></div>
                   <div>
                     <strong>Plando · Seraph Form</strong>
-                    <p style="margin:6px 0 0;">Feathered wings deliver purified events to your services.</p>
+                    <p style="margin:6px 0 0;">Wings deliver purified events to your favorite services.</p>
                   </div>
                 </div>
               </div>
             </article>
 
             <article class="card">
-              <h3>Guardian Observatory</h3>
+              <h3>Bridge Keeper’s Observatory</h3>
               <p>
-                Explore the calendar constellation, consult productivity omens, and let the oracle arrange upcoming
-                events.
+                Explore a calendar constellation, review productivity omens, and let the oracle rearrange upcoming events.
               </p>
               <ul style="color:var(--muted);padding-left:20px;line-height:1.6;">
-                <li>Date range productivity analysis.</li>
-                <li>Work/rest balance graph.</li>
-                <li>Auto-generated optimization prompts.</li>
+                <li>Date range analysis for focus windows.</li>
+                <li>Work vs rest energy balance graph.</li>
+                <li>Auto-slot optimized suggestions.</li>
               </ul>
             </article>
           </div>
         </section>
 
-        <section id="view-upload" class="view" hidden>
+        <section id="view-upload" class="view">
           <div class="section-header">
             <h2>Plando · Upload Chamber</h2>
-            <button class="ghost-button" data-nav="view-home">← Back to the portal</button>
+            <button class="ghost-button" data-nav="view-home">← Back to main portal</button>
           </div>
           <div class="two-column">
             <div>
               <div class="card" style="min-height:320px;">
-                <h3>Metamorphic Log</h3>
-                <p>Each stage explains how Plando reshapes to escort your file.</p>
+                <h3>Metamorphosis Log</h3>
+                <p>Each stage shows how Plando reshapes to escort your file.</p>
                 <div class="timeline">
                   <div class="timeline-step">
                     <strong>Sentinel</strong>
-                    <p>Initial validation plus timezone and language alignment.</p>
+                    <p>Initial validation, timezone + locale attunement.</p>
                   </div>
                   <div class="timeline-step">
                     <strong>Abyssal</strong>
-                    <p>Tentacles transcribe handwriting and inspect JSON payloads.</p>
+                    <p>Tentacles transcribe handwriting and parse JSON payloads.</p>
                   </div>
                   <div class="timeline-step">
                     <strong>Seraph</strong>
-                    <p>Events are blessed and shipped to Calendar, Notion, or Sheets.</p>
+                    <p>Events are blessed and dispatched to Calendar, Notion or Sheets.</p>
                   </div>
                 </div>
               </div>
@@ -547,22 +546,22 @@
               <div class="card">
                 <form id="upload-form" onsubmit="event.preventDefault(); handleFormSubmit();">
                   <div class="form-group">
-                    <label for="file-input">1. Upload photo (.jpg/.png) or JSON (.json)</label>
+                    <label for="file-input">1. Carica foto (.jpg/.png) o JSON (.json)</label>
                     <input type="file" id="file-input" accept="image/jpeg, image/png, application/json, .json" />
                   </div>
 
                   <div class="form-group">
-                    <label for="tz">2. Timezone (photos only)</label>
+                    <label for="tz">2. Fuso orario (solo foto)</label>
                     <input type="text" id="tz" value="Europe/Amsterdam" />
                   </div>
 
                   <div class="form-group">
-                    <label for="locale">3. Language (photos only)</label>
-                    <input type="text" id="locale" value="en-US" />
+                    <label for="locale">3. Lingua (solo foto)</label>
+                    <input type="text" id="locale" value="it-IT" />
                   </div>
 
                   <button type="submit" id="submit-button" class="pill-button" style="width:100%; margin-top:12px;">
-                    Send through the bridge
+                    Invia al ponte
                   </button>
                   <div id="status" class="status-text"></div>
                 </form>
@@ -571,10 +570,10 @@
           </div>
         </section>
 
-        <section id="view-optimize" class="view" hidden>
+        <section id="view-optimize" class="view">
           <div class="section-header">
-            <h2>Guardian · Optimization Observatory</h2>
-            <button class="ghost-button" data-nav="view-home">← Back to the portal</button>
+            <h2>Bridge Keeper · Optimization Observatory</h2>
+            <button class="ghost-button" data-nav="view-home">← Back to main portal</button>
           </div>
 
           <div class="panel-grid">
@@ -644,36 +643,158 @@
           </div>
         </section>
       </main>
+      .loading { color: #4285F4; }
+      .success { color: #0f9d58; }
+      .error { color: #db4437; }
+
+      /* Optimization panel styles */
+      #optimization-panel {
+        margin-top: 32px;
+        padding: 24px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+      #optimization-panel h2 {
+        margin-top: 0;
+        color: #222;
+      }
+      .panel-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      @media (min-width: 768px) {
+        .panel-grid {
+          flex-direction: row;
+        }
+      }
+      .panel-column {
+        flex: 1;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 16px;
+        background-color: #fafafa;
+      }
+      .panel-column h3 {
+        margin-top: 0;
+        font-size: 0.85rem;
+        color: #555;
+        letter-spacing: 1px;
+      }
+      .panel-column label {
+        font-size: 0.8rem;
+        color: #666;
+      }
+      .panel-column input[type="date"],
+      .panel-column input[type="text"] {
+        background-color: #fff;
+      }
+      #opt-events-list {
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      .opt-event {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        background-color: #fff;
+      }
+      .opt-event button {
+        background: none;
+        border: none;
+        color: #db4437;
+        font-size: 18px;
+        cursor: pointer;
+      }
+      #opt-add-event {
+        width: 48px;
+        min-width: 48px;
+        padding: 0;
+      }
+      #opt-results {
+        min-height: 120px;
+      }
+      .opt-slot {
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 8px;
+        background-color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+
+    <h2>Plando: Carica Agenda</h2>
+    
+    <div id="upload-form">
+      <div class="form-group">
+        <label for="image">1. Seleziona foto (.jpg, .png) o JSON (.json):</label>
+        <input type="file" id="file-input" accept="image/jpeg, image/png, application/json, .json">
+      </div>
+      
+      <div class="form-group">
+        <label for="tz">2. Fuso orario (solo per upload foto):</label>
+        <input type="text" id="tz" value="Europe/Amsterdam">
+      </div>
+      
+      <div class="form-group">
+        <label for="locale">3. Lingua (solo per upload foto):</label>
+        <input type="text" id="locale" value="it-IT">
+      </div>
+      
+      <button id="submit-button" onclick="handleFormSubmit()">Carica e Processa</button>
+      
+      <div id="status"></div>
+    </div>
+
+    <div id="optimization-panel">
+      <h2>Ottimizzazione Agenda</h2>
+      <div class="panel-grid">
+        <div class="panel-column">
+          <h3>DATE</h3>
+          <div class="form-group">
+            <label for="opt-start-date">Da</label>
+            <input type="date" id="opt-start-date">
+          </div>
+          <div class="form-group">
+            <label for="opt-end-date">A</label>
+            <input type="date" id="opt-end-date">
+          </div>
+
+          <h3>EVENTI</h3>
+          <div class="form-group" style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="opt-new-event" placeholder="Aggiungi evento">
+            <button id="opt-add-event">+</button>
+          </div>
+          <div id="opt-events-list"></div>
+
+          <button id="optimize-button">Ottimizza</button>
+        </div>
+        <div class="panel-column">
+          <h3>RISULTATI</h3>
+          <div id="opt-results" class="text-sm"></div>
+        </div>
+      </div>
     </div>
 
     <script>
       // --------- Navigation between portals ---------
-      const navButtons = Array.from(document.querySelectorAll('.nav-actions [data-nav]'));
       document.querySelectorAll('[data-nav]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const targetView = btn.getAttribute('data-nav');
-          const isNavControl = navButtons.includes(btn);
-          showView(targetView, isNavControl ? btn : null);
-        });
+        btn.addEventListener('click', () => showView(btn.getAttribute('data-nav')));
       });
 
-      function showView(targetId, triggerBtn) {
+      function showView(targetId) {
         document.querySelectorAll('.view').forEach((view) => {
-          const isActive = view.id === targetId;
-          view.classList.toggle('active', isActive);
-          view.hidden = !isActive;
+          view.classList.toggle('active', view.id === targetId);
         });
-
-        if (triggerBtn) {
-          navButtons.forEach((btn) => {
-            const isCurrent = btn === triggerBtn;
-            btn.setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
-            btn.dataset.active = isCurrent ? 'true' : 'false';
-          });
-        }
       }
-
-      showView('view-home', document.querySelector('.nav-actions [data-nav="view-home"]'));
 
       // --------- Upload logic (Apps Script bridge) ---------
       function handleFormSubmit() {
@@ -703,7 +824,7 @@
             google.script.run.withSuccessHandler(showSuccess).withFailureHandler(showError).processUpload(formObject);
           };
           reader.onerror = function () {
-            showError(new Error('Unable to read the JSON file.'));
+            showError(new Error('Impossibile leggere il file JSON.'));
           };
           reader.readAsText(file);
         } else if (file.type.startsWith('image/')) {
@@ -718,7 +839,7 @@
             google.script.run.withSuccessHandler(showSuccess).withFailureHandler(showError).processUpload(formObject);
           };
           reader.onerror = function () {
-            showError(new Error('Unable to read the image file.'));
+            showError(new Error('Impossibile leggere il file immagine.'));
           };
           reader.readAsDataURL(file);
         } else {
@@ -788,7 +909,7 @@
           eventsList.innerHTML = '';
           if (state.events.length === 0) {
             const empty = document.createElement('p');
-            empty.textContent = 'No summoned events yet.';
+            empty.textContent = 'Nessun evento evocato.';
             empty.style.color = 'var(--muted)';
             eventsList.appendChild(empty);
             return;
@@ -827,13 +948,13 @@
           resultsBox.innerHTML = '';
           if (state.isOptimizing) {
             const loading = document.createElement('div');
-            loading.textContent = 'Consulting constellations...';
+            loading.textContent = 'Calcolo in corso...';
             resultsBox.appendChild(loading);
             return;
           }
           if (!state.optimizationComplete) {
             const idle = document.createElement('div');
-            idle.textContent = 'Awaiting the oracle’s response.';
+            idle.textContent = 'In attesa di un responso dell’oracolo.';
             idle.style.color = 'var(--muted)';
             resultsBox.appendChild(idle);
             return;
@@ -958,6 +1079,135 @@
         renderResults();
         renderCalendar();
         renderKPIs();
+      }
+
+      /**
+       * Simple optimization panel logic (plain JS version of the React component).
+       */
+      document.addEventListener('DOMContentLoaded', initOptimizationPanel);
+
+      function initOptimizationPanel() {
+        const defaultEvents = [
+          { id: '1', title: 'Project Planning', duration: '2h' },
+          { id: '2', title: 'Code Review', duration: '1h' },
+          { id: '3', title: 'Learning Session', duration: '1.5h' }
+        ];
+
+        const optimizedSlots = [
+          { day: 'Lunedì', time: '09:00', event: 'Project Planning' },
+          { day: 'Lunedì', time: '14:00', event: 'Code Review' },
+          { day: 'Martedì', time: '10:00', event: 'Learning Session' }
+        ];
+
+        const state = {
+          events: defaultEvents.slice(),
+          isOptimizing: false,
+          optimizationComplete: false
+        };
+
+        const startInput = document.getElementById('opt-start-date');
+        const endInput = document.getElementById('opt-end-date');
+        const addBtn = document.getElementById('opt-add-event');
+        const newEventInput = document.getElementById('opt-new-event');
+        const optimizeBtn = document.getElementById('optimize-button');
+        const eventsList = document.getElementById('opt-events-list');
+        const resultsBox = document.getElementById('opt-results');
+
+        const today = new Date();
+        const nextWeek = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+        startInput.value = today.toISOString().slice(0, 10);
+        endInput.value = nextWeek.toISOString().slice(0, 10);
+
+        function renderEvents() {
+          eventsList.innerHTML = '';
+          if (state.events.length === 0) {
+            const empty = document.createElement('p');
+            empty.textContent = 'Nessun evento.';
+            empty.style.color = '#777';
+            eventsList.appendChild(empty);
+            return;
+          }
+          state.events.forEach(event => {
+            const row = document.createElement('div');
+            row.className = 'opt-event';
+            row.innerHTML = `
+              <div>
+                <strong>${event.title}</strong><br>
+                <small>${event.duration}</small>
+              </div>
+              <button type="button" aria-label="Rimuovi">×</button>
+            `;
+            row.querySelector('button').addEventListener('click', () => {
+              state.events = state.events.filter(e => e.id !== event.id);
+              renderEvents();
+              updateOptimizeButton();
+            });
+            eventsList.appendChild(row);
+          });
+        }
+
+        function updateOptimizeButton() {
+          optimizeBtn.disabled = state.events.length === 0 || state.isOptimizing;
+          optimizeBtn.textContent = state.isOptimizing ? 'In corso...' : 'Ottimizza';
+        }
+
+        function renderResults() {
+          resultsBox.innerHTML = '';
+          if (state.isOptimizing) {
+            resultsBox.textContent = 'Calcolo in corso...';
+            resultsBox.style.color = '#4285F4';
+            return;
+          }
+          if (!state.optimizationComplete) {
+            resultsBox.textContent = 'In attesa di ottimizzazione.';
+            resultsBox.style.color = '#777';
+            return;
+          }
+          resultsBox.style.color = '#333';
+          optimizedSlots.forEach(slot => {
+            const block = document.createElement('div');
+            block.className = 'opt-slot';
+            block.innerHTML = `<strong>${slot.event}</strong><br><small>${slot.day} · ${slot.time}</small>`;
+            resultsBox.appendChild(block);
+          });
+        }
+
+        addBtn.addEventListener('click', () => {
+          const value = newEventInput.value.trim();
+          if (!value) return;
+          state.events.push({ id: Date.now().toString(), title: value, duration: '1h' });
+          newEventInput.value = '';
+          renderEvents();
+          updateOptimizeButton();
+          state.optimizationComplete = false;
+          renderResults();
+        });
+
+        newEventInput.addEventListener('keypress', (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            addBtn.click();
+          }
+        });
+
+        optimizeBtn.addEventListener('click', () => {
+          if (state.events.length === 0 || state.isOptimizing) return;
+          state.isOptimizing = true;
+          state.optimizationComplete = false;
+          updateOptimizeButton();
+          renderResults();
+
+          setTimeout(() => {
+            state.isOptimizing = false;
+            state.optimizationComplete = true;
+            updateOptimizeButton();
+            renderResults();
+          }, 2000);
+        });
+
+        renderEvents();
+        updateOptimizeButton();
+        renderResults();
       }
     </script>
   </body>
