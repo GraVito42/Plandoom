@@ -144,8 +144,21 @@ var Plando = (function() {
     var bestSize = photoSizes[photoSizes.length - 1]; 
     if (bestSize && bestSize.file_id) {
       try {
-        // Assumiamo che Glando.gs contenga la funzione sendSeendo per l'OCR
-        var ocrResult = Glando.sendSeendo(bestSize); 
+        var downloadUrl = _resolveTelegramFileUrl(bestSize.file_id);
+        var ocrFn = null;
+
+        if (Glando && typeof Glando.sendSeendo === "function") {
+          ocrFn = Glando.sendSeendo;
+        } else if (typeof sendSeendo === "function") {
+          // Fallback: funzione globale definita in Seendo.gs
+          ocrFn = sendSeendo;
+        }
+
+        if (!ocrFn) {
+          throw new Error("Funzione sendSeendo non disponibile.");
+        }
+
+        var ocrResult = ocrFn(downloadUrl);
         if (ocrResult && typeof ocrResult === "string") {
           sendMessage(chat_id, ocrResult);
         } else {
@@ -261,6 +274,20 @@ var Plando = (function() {
     blob.setName(filePath.split('/').pop()); 
     
     return blob;
+  }
+
+  function _resolveTelegramFileUrl(fileId) {
+    if (!fileId) {
+      throw new Error("file_id mancante per il recupero dell'immagine");
+    }
+
+    var fileResp = UrlFetchApp.fetch(telegramUrl + "/getFile?file_id=" + encodeURIComponent(fileId));
+    var fileData = JSON.parse(fileResp.getContentText());
+    if (!fileData.ok || !(fileData.result && fileData.result.file_path)) {
+      throw new Error("Risposta non valida da Telegram (getFile).");
+    }
+
+    return "https://api.telegram.org/file/bot" + token + "/" + fileData.result.file_path;
   }
 
   // --- Funzioni di utilità per il parsing (Spostate) ---

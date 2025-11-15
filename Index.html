@@ -15,6 +15,10 @@
         --muted: rgba(255, 255, 255, 0.6);
         --card: rgba(11, 18, 34, 0.85);
         --border: rgba(255, 255, 255, 0.12);
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f9f9f9;
       }
 
       * {
@@ -639,6 +643,145 @@
           </div>
         </section>
       </main>
+      .loading { color: #4285F4; }
+      .success { color: #0f9d58; }
+      .error { color: #db4437; }
+
+      /* Optimization panel styles */
+      #optimization-panel {
+        margin-top: 32px;
+        padding: 24px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+      #optimization-panel h2 {
+        margin-top: 0;
+        color: #222;
+      }
+      .panel-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      @media (min-width: 768px) {
+        .panel-grid {
+          flex-direction: row;
+        }
+      }
+      .panel-column {
+        flex: 1;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 16px;
+        background-color: #fafafa;
+      }
+      .panel-column h3 {
+        margin-top: 0;
+        font-size: 0.85rem;
+        color: #555;
+        letter-spacing: 1px;
+      }
+      .panel-column label {
+        font-size: 0.8rem;
+        color: #666;
+      }
+      .panel-column input[type="date"],
+      .panel-column input[type="text"] {
+        background-color: #fff;
+      }
+      #opt-events-list {
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      .opt-event {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        background-color: #fff;
+      }
+      .opt-event button {
+        background: none;
+        border: none;
+        color: #db4437;
+        font-size: 18px;
+        cursor: pointer;
+      }
+      #opt-add-event {
+        width: 48px;
+        min-width: 48px;
+        padding: 0;
+      }
+      #opt-results {
+        min-height: 120px;
+      }
+      .opt-slot {
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 8px;
+        background-color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+
+    <h2>Plando: Carica Agenda</h2>
+    
+    <div id="upload-form">
+      <div class="form-group">
+        <label for="image">1. Seleziona foto (.jpg, .png) o JSON (.json):</label>
+        <input type="file" id="file-input" accept="image/jpeg, image/png, application/json, .json">
+      </div>
+      
+      <div class="form-group">
+        <label for="tz">2. Fuso orario (solo per upload foto):</label>
+        <input type="text" id="tz" value="Europe/Amsterdam">
+      </div>
+      
+      <div class="form-group">
+        <label for="locale">3. Lingua (solo per upload foto):</label>
+        <input type="text" id="locale" value="it-IT">
+      </div>
+      
+      <button id="submit-button" onclick="handleFormSubmit()">Carica e Processa</button>
+      
+      <div id="status"></div>
+    </div>
+
+    <div id="optimization-panel">
+      <h2>Ottimizzazione Agenda</h2>
+      <div class="panel-grid">
+        <div class="panel-column">
+          <h3>DATE</h3>
+          <div class="form-group">
+            <label for="opt-start-date">Da</label>
+            <input type="date" id="opt-start-date">
+          </div>
+          <div class="form-group">
+            <label for="opt-end-date">A</label>
+            <input type="date" id="opt-end-date">
+          </div>
+
+          <h3>EVENTI</h3>
+          <div class="form-group" style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="opt-new-event" placeholder="Aggiungi evento">
+            <button id="opt-add-event">+</button>
+          </div>
+          <div id="opt-events-list"></div>
+
+          <button id="optimize-button">Ottimizza</button>
+        </div>
+        <div class="panel-column">
+          <h3>RISULTATI</h3>
+          <div id="opt-results" class="text-sm"></div>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -936,6 +1079,135 @@
         renderResults();
         renderCalendar();
         renderKPIs();
+      }
+
+      /**
+       * Simple optimization panel logic (plain JS version of the React component).
+       */
+      document.addEventListener('DOMContentLoaded', initOptimizationPanel);
+
+      function initOptimizationPanel() {
+        const defaultEvents = [
+          { id: '1', title: 'Project Planning', duration: '2h' },
+          { id: '2', title: 'Code Review', duration: '1h' },
+          { id: '3', title: 'Learning Session', duration: '1.5h' }
+        ];
+
+        const optimizedSlots = [
+          { day: 'Lunedì', time: '09:00', event: 'Project Planning' },
+          { day: 'Lunedì', time: '14:00', event: 'Code Review' },
+          { day: 'Martedì', time: '10:00', event: 'Learning Session' }
+        ];
+
+        const state = {
+          events: defaultEvents.slice(),
+          isOptimizing: false,
+          optimizationComplete: false
+        };
+
+        const startInput = document.getElementById('opt-start-date');
+        const endInput = document.getElementById('opt-end-date');
+        const addBtn = document.getElementById('opt-add-event');
+        const newEventInput = document.getElementById('opt-new-event');
+        const optimizeBtn = document.getElementById('optimize-button');
+        const eventsList = document.getElementById('opt-events-list');
+        const resultsBox = document.getElementById('opt-results');
+
+        const today = new Date();
+        const nextWeek = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+        startInput.value = today.toISOString().slice(0, 10);
+        endInput.value = nextWeek.toISOString().slice(0, 10);
+
+        function renderEvents() {
+          eventsList.innerHTML = '';
+          if (state.events.length === 0) {
+            const empty = document.createElement('p');
+            empty.textContent = 'Nessun evento.';
+            empty.style.color = '#777';
+            eventsList.appendChild(empty);
+            return;
+          }
+          state.events.forEach(event => {
+            const row = document.createElement('div');
+            row.className = 'opt-event';
+            row.innerHTML = `
+              <div>
+                <strong>${event.title}</strong><br>
+                <small>${event.duration}</small>
+              </div>
+              <button type="button" aria-label="Rimuovi">×</button>
+            `;
+            row.querySelector('button').addEventListener('click', () => {
+              state.events = state.events.filter(e => e.id !== event.id);
+              renderEvents();
+              updateOptimizeButton();
+            });
+            eventsList.appendChild(row);
+          });
+        }
+
+        function updateOptimizeButton() {
+          optimizeBtn.disabled = state.events.length === 0 || state.isOptimizing;
+          optimizeBtn.textContent = state.isOptimizing ? 'In corso...' : 'Ottimizza';
+        }
+
+        function renderResults() {
+          resultsBox.innerHTML = '';
+          if (state.isOptimizing) {
+            resultsBox.textContent = 'Calcolo in corso...';
+            resultsBox.style.color = '#4285F4';
+            return;
+          }
+          if (!state.optimizationComplete) {
+            resultsBox.textContent = 'In attesa di ottimizzazione.';
+            resultsBox.style.color = '#777';
+            return;
+          }
+          resultsBox.style.color = '#333';
+          optimizedSlots.forEach(slot => {
+            const block = document.createElement('div');
+            block.className = 'opt-slot';
+            block.innerHTML = `<strong>${slot.event}</strong><br><small>${slot.day} · ${slot.time}</small>`;
+            resultsBox.appendChild(block);
+          });
+        }
+
+        addBtn.addEventListener('click', () => {
+          const value = newEventInput.value.trim();
+          if (!value) return;
+          state.events.push({ id: Date.now().toString(), title: value, duration: '1h' });
+          newEventInput.value = '';
+          renderEvents();
+          updateOptimizeButton();
+          state.optimizationComplete = false;
+          renderResults();
+        });
+
+        newEventInput.addEventListener('keypress', (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            addBtn.click();
+          }
+        });
+
+        optimizeBtn.addEventListener('click', () => {
+          if (state.events.length === 0 || state.isOptimizing) return;
+          state.isOptimizing = true;
+          state.optimizationComplete = false;
+          updateOptimizeButton();
+          renderResults();
+
+          setTimeout(() => {
+            state.isOptimizing = false;
+            state.optimizationComplete = true;
+            updateOptimizeButton();
+            renderResults();
+          }, 2000);
+        });
+
+        renderEvents();
+        updateOptimizeButton();
+        renderResults();
       }
     </script>
   </body>
