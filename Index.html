@@ -1,59 +1,736 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <base target="_top">
+    <meta charset="utf-8" />
+    <base target="_top" />
+    <title>Plandoom · Planner Bridge</title>
     <style>
-      body { 
-        font-family: Arial, sans-serif; 
-        margin: 20px; 
+      :root {
+        color-scheme: dark;
+        --ink: #040814;
+        --ink-soft: rgba(11, 18, 34, 0.85);
+        --glow: #a5f0ff;
+        --accent: #6c7bff;
+        --accent-2: #0b9cd8;
+        --muted: rgba(255, 255, 255, 0.6);
+        --card: rgba(11, 18, 34, 0.85);
+        --border: rgba(255, 255, 255, 0.12);
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
         background-color: #f9f9f9;
       }
-      #upload-form {
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Space Grotesk", "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: radial-gradient(circle at top, #0f1b32, #02050c 65%);
+        color: #f0f4ff;
+      }
+
+      .app-shell {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      .top-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24px clamp(20px, 4vw, 72px);
+      }
+
+      .logo {
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .nav-actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      button,
+      .ghost-button,
+      .pill-button {
+        font-family: inherit;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      }
+
+      .pill-button {
+        padding: 10px 20px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: white;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .pill-button.secondary {
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .pill-button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .pill-button:not(:disabled):hover,
+      .ghost-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(12, 186, 255, 0.35);
+      }
+
+      .ghost-button {
+        padding: 8px 18px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: transparent;
+        color: inherit;
+      }
+
+      main {
+        flex: 1;
+        padding: 0 clamp(20px, 4vw, 72px) 80px;
+      }
+
+      .view {
+        display: none;
+        animation: fadeIn 0.5s ease;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .hero {
+        text-align: center;
+        padding: 60px 0 80px;
+      }
+
+      .hero h1 {
+        font-size: clamp(2.2rem, 5vw, 4rem);
+        margin-bottom: 16px;
+      }
+
+      .hero p {
+        color: var(--muted);
+        max-width: 720px;
+        margin: 0 auto 24px;
+        line-height: 1.6;
+      }
+
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 24px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: inset 0 0 60px rgba(85, 150, 255, 0.08);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card::after {
+        content: "";
+        position: absolute;
+        inset: -40% auto auto 50%;
+        width: 200px;
+        height: 200px;
+        background: radial-gradient(circle, rgba(165, 240, 255, 0.2), transparent 55%);
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+
+      .card h3 {
+        margin-top: 0;
+      }
+
+      .card p {
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .character-stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .character-card {
+        border-radius: 18px;
+        padding: 16px;
+        background: linear-gradient(145deg, rgba(33, 52, 96, 0.9), rgba(8, 13, 26, 0.9));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .character-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: radial-gradient(circle at 30% 30%, #7ac3ff, #18233f);
+        box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.25);
+        position: relative;
+      }
+
+      .character-avatar::after {
+        content: "";
+        position: absolute;
+        inset: 10px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+
+      .section-header h2 {
+        margin: 0;
+        font-size: 1.8rem;
+      }
+
+      .two-column {
+        display: grid;
+        gap: 32px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      form label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      input[type="text"],
+      input[type="file"],
+      input[type="date"],
+      input[type="time"],
+      select,
+      textarea {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 12px 14px;
+        background: rgba(8, 12, 25, 0.8);
+        color: white;
+        font-size: 1rem;
+      }
+
+      input[type="file"] {
+        padding: 8px;
+      }
+
+      .status-text {
+        margin-top: 14px;
+        font-weight: 600;
+      }
+
+      .loading { color: var(--accent-2); }
+      .success { color: #53dcb8; }
+      .error { color: #ff7695; }
+
+      .timeline {
+        border-left: 2px solid rgba(255, 255, 255, 0.25);
+        padding-left: 20px;
+        margin-top: 18px;
+        position: relative;
+      }
+
+      .timeline::before {
+        content: "";
+        position: absolute;
+        left: -7px;
+        top: 0;
+        bottom: 0;
+        border-left: 1px dashed rgba(255, 255, 255, 0.2);
+      }
+
+      .timeline-step {
+        margin-bottom: 22px;
+      }
+
+      .timeline-step strong {
+        color: white;
+      }
+
+      .panel-grid {
+        display: grid;
+        gap: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      }
+
+      .panel-column {
+        background: rgba(8, 13, 25, 0.85);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        padding: 24px;
+        min-height: 360px;
+        box-shadow: inset 0 0 40px rgba(78, 115, 255, 0.12);
+      }
+
+      .panel-column h3 {
+        margin-top: 0;
+        letter-spacing: 0.08em;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+
+      .event-composer {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        align-items: end;
+      }
+
+      #opt-events-list {
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 12px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .opt-event {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(12, 20, 42, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .opt-event small {
+        color: var(--muted);
+      }
+
+      .opt-event button {
+        background: transparent;
+        color: #ff7695;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+      }
+
+      #opt-results {
+        margin-top: 18px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .opt-slot {
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(10, 16, 32, 0.8);
+      }
+
+      .calendar-wrapper {
+        margin-top: 24px;
+      }
+
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+      }
+
+      .calendar-day {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        padding: 12px;
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .calendar-day h4 {
+        margin: 0;
+        font-size: 0.9rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .calendar-chip {
+        border-radius: 10px;
+        padding: 6px 8px;
+        background: rgba(99, 132, 255, 0.2);
+        border: 1px solid rgba(99, 132, 255, 0.4);
+        font-size: 0.85rem;
+      }
+
+      .kpi-graph {
+        margin-top: 24px;
+      }
+
+      .kpi-bars {
+        display: grid;
+        gap: 12px;
+      }
+
+      .kpi-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .kpi-bar-track {
+        width: 100%;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .kpi-bar-fill {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #53dcb8, #71a5ff);
+      }
+
+      @media (max-width: 640px) {
+        .top-nav {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .section-header {
+          flex-direction: column;
+          gap: 12px;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-nav">
+        <div class="logo">Webapp Planner Bridge</div>
+        <div class="nav-actions">
+          <button class="pill-button secondary" data-nav="view-home">Main</button>
+          <button class="pill-button" data-nav="view-upload">Summon Plando</button>
+          <button class="pill-button" data-nav="view-optimize">Enter Observatory</button>
+        </div>
+      </header>
+
+      <main>
+        <section id="view-home" class="view active">
+          <div class="hero">
+            <h1>Cross the mysterious bridge between plans and reality.</h1>
+            <p>
+              Upload arcane agendas, study your productivity rituals, and let the Plandoom spirits forge
+              an optimized calendar that respects both work and rest.
+            </p>
+            <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+              <button class="pill-button" data-nav="view-upload">Begin the Upload Rite</button>
+              <button class="pill-button secondary" data-nav="view-optimize">Consult the Oracle</button>
+            </div>
+          </div>
+
+          <div class="card-grid">
+            <article class="card">
+              <h3>The Plando Gate</h3>
+              <p>
+                Guide JSON files or agenda photos through Plando’s shapeshifting journey and push the events into
+                Calendar, Notion, or Sheets.
+              </p>
+              <div class="character-stack">
+                <div class="character-card">
+                  <div class="character-avatar"></div>
+                  <div>
+                    <strong>Plando · Sentinel Form</strong>
+                    <p style="margin:6px 0 0;">Jagged body, notebook mind. Guards every upload.</p>
+                  </div>
+                </div>
+                <div class="character-card">
+                  <div class="character-avatar"></div>
+                  <div>
+                    <strong>Plando · Abyssal Form</strong>
+                    <p style="margin:6px 0 0;">Tentacles wrap each task, decoding handwriting and data.</p>
+                  </div>
+                </div>
+                <div class="character-card">
+                  <div class="character-avatar"></div>
+                  <div>
+                    <strong>Plando · Seraph Form</strong>
+                    <p style="margin:6px 0 0;">Wings deliver purified events to your favorite services.</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <h3>Bridge Keeper’s Observatory</h3>
+              <p>
+                Explore a calendar constellation, review productivity omens, and let the oracle rearrange upcoming events.
+              </p>
+              <ul style="color:var(--muted);padding-left:20px;line-height:1.6;">
+                <li>Date range analysis for focus windows.</li>
+                <li>Work vs rest energy balance graph.</li>
+                <li>Auto-slot optimized suggestions.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-upload" class="view">
+          <div class="section-header">
+            <h2>Plando · Upload Chamber</h2>
+            <button class="ghost-button" data-nav="view-home">← Back to main portal</button>
+          </div>
+          <div class="two-column">
+            <div>
+              <div class="card" style="min-height:320px;">
+                <h3>Metamorphosis Log</h3>
+                <p>Each stage shows how Plando reshapes to escort your file.</p>
+                <div class="timeline">
+                  <div class="timeline-step">
+                    <strong>Sentinel</strong>
+                    <p>Initial validation, timezone + locale attunement.</p>
+                  </div>
+                  <div class="timeline-step">
+                    <strong>Abyssal</strong>
+                    <p>Tentacles transcribe handwriting and parse JSON payloads.</p>
+                  </div>
+                  <div class="timeline-step">
+                    <strong>Seraph</strong>
+                    <p>Events are blessed and dispatched to Calendar, Notion or Sheets.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="card">
+                <form id="upload-form" onsubmit="event.preventDefault(); handleFormSubmit();">
+                  <div class="form-group">
+                    <label for="file-input">1. Carica foto (.jpg/.png) o JSON (.json)</label>
+                    <input type="file" id="file-input" accept="image/jpeg, image/png, application/json, .json" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="tz">2. Fuso orario (solo foto)</label>
+                    <input type="text" id="tz" value="Europe/Amsterdam" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="locale">3. Lingua (solo foto)</label>
+                    <input type="text" id="locale" value="it-IT" />
+                  </div>
+
+                  <button type="submit" id="submit-button" class="pill-button" style="width:100%; margin-top:12px;">
+                    Invia al ponte
+                  </button>
+                  <div id="status" class="status-text"></div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-optimize" class="view">
+          <div class="section-header">
+            <h2>Bridge Keeper · Optimization Observatory</h2>
+            <button class="ghost-button" data-nav="view-home">← Back to main portal</button>
+          </div>
+
+          <div class="panel-grid">
+            <div class="panel-column">
+              <h3>DATE RANGE</h3>
+              <div class="two-column" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
+                <div>
+                  <label for="opt-start-date">From</label>
+                  <input type="date" id="opt-start-date" />
+                </div>
+                <div>
+                  <label for="opt-end-date">To</label>
+                  <input type="date" id="opt-end-date" />
+                </div>
+              </div>
+
+              <h3 style="margin-top:24px;">SUMMON EVENTS</h3>
+              <div class="event-composer">
+                <div>
+                  <label for="opt-new-event">Title</label>
+                  <input type="text" id="opt-new-event" placeholder="New ritual" />
+                </div>
+                <div>
+                  <label for="opt-day">Day</label>
+                  <select id="opt-day">
+                    <option value="Monday">Mon</option>
+                    <option value="Tuesday">Tue</option>
+                    <option value="Wednesday">Wed</option>
+                    <option value="Thursday">Thu</option>
+                    <option value="Friday">Fri</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="opt-time">Time</label>
+                  <input type="time" id="opt-time" value="09:00" />
+                </div>
+                <div>
+                  <label for="opt-type">Type</label>
+                  <select id="opt-type">
+                    <option value="work">Work</option>
+                    <option value="rest">Rest</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                </div>
+                <button class="pill-button" id="opt-add-event" style="height:48px;">Add</button>
+              </div>
+
+              <div id="opt-events-list"></div>
+
+              <button id="optimize-button" class="pill-button" style="margin-top:18px;width:100%;">
+                Start Optimization
+              </button>
+            </div>
+
+            <div class="panel-column">
+              <h3>RESULTS &amp; ORACLE OUTPUT</h3>
+              <div id="opt-results"></div>
+              <div class="calendar-wrapper">
+                <h3>CALENDAR CONSTELLATION</h3>
+                <div class="calendar-grid" id="calendar-grid"></div>
+              </div>
+              <div class="kpi-graph">
+                <h3>ENERGY BALANCE</h3>
+                <div class="kpi-bars" id="kpi-bars"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+      .loading { color: #4285F4; }
+      .success { color: #0f9d58; }
+      .error { color: #db4437; }
+
+      /* Optimization panel styles */
+      #optimization-panel {
+        margin-top: 32px;
         padding: 24px;
         background-color: #fff;
         border: 1px solid #ddd;
         border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       }
-      .form-group {
-        margin-bottom: 16px;
+      #optimization-panel h2 {
+        margin-top: 0;
+        color: #222;
       }
-      label {
-        display: block;
-        font-weight: bold;
-        margin-bottom: 6px;
+      .panel-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
       }
-      input[type="text"], input[type="file"] {
-        width: 100%;
-        padding: 8px;
-        box-sizing: border-box; /* Assicura che il padding non rompa il layout */
-        border: 1px solid #ccc;
-        border-radius: 4px;
+      @media (min-width: 768px) {
+        .panel-grid {
+          flex-direction: row;
+        }
       }
-      button {
-        background-color: #4285F4; /* Stile Google */
-        color: white;
-        padding: 10px 16px;
+      .panel-column {
+        flex: 1;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 16px;
+        background-color: #fafafa;
+      }
+      .panel-column h3 {
+        margin-top: 0;
+        font-size: 0.85rem;
+        color: #555;
+        letter-spacing: 1px;
+      }
+      .panel-column label {
+        font-size: 0.8rem;
+        color: #666;
+      }
+      .panel-column input[type="date"],
+      .panel-column input[type="text"] {
+        background-color: #fff;
+      }
+      #opt-events-list {
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      .opt-event {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        background-color: #fff;
+      }
+      .opt-event button {
+        background: none;
         border: none;
-        border-radius: 4px;
-        font-size: 16px;
+        color: #db4437;
+        font-size: 18px;
         cursor: pointer;
       }
-      button:disabled {
-        background-color: #aaa;
-        cursor: not-allowed;
+      #opt-add-event {
+        width: 48px;
+        min-width: 48px;
+        padding: 0;
       }
-      #status {
-        margin-top: 16px;
-        font-weight: bold;
+      #opt-results {
+        min-height: 120px;
       }
-      .loading { color: #4285F4; }
-      .success { color: #0f9d58; }
-      .error { color: #db4437; }
+      .opt-slot {
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 8px;
+        background-color: #fff;
+      }
     </style>
   </head>
   <body>
-    
+
     <h2>Plando: Carica Agenda</h2>
     
     <div id="upload-form">
@@ -77,107 +754,460 @@
       <div id="status"></div>
     </div>
 
+    <div id="optimization-panel">
+      <h2>Ottimizzazione Agenda</h2>
+      <div class="panel-grid">
+        <div class="panel-column">
+          <h3>DATE</h3>
+          <div class="form-group">
+            <label for="opt-start-date">Da</label>
+            <input type="date" id="opt-start-date">
+          </div>
+          <div class="form-group">
+            <label for="opt-end-date">A</label>
+            <input type="date" id="opt-end-date">
+          </div>
+
+          <h3>EVENTI</h3>
+          <div class="form-group" style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="opt-new-event" placeholder="Aggiungi evento">
+            <button id="opt-add-event">+</button>
+          </div>
+          <div id="opt-events-list"></div>
+
+          <button id="optimize-button">Ottimizza</button>
+        </div>
+        <div class="panel-column">
+          <h3>RISULTATI</h3>
+          <div id="opt-results" class="text-sm"></div>
+        </div>
+      </div>
+    </div>
+
     <script>
-      /**
-       * Gestisce il clic sul pulsante.
-       */
+      // --------- Navigation between portals ---------
+      document.querySelectorAll('[data-nav]').forEach((btn) => {
+        btn.addEventListener('click', () => showView(btn.getAttribute('data-nav')));
+      });
+
+      function showView(targetId) {
+        document.querySelectorAll('.view').forEach((view) => {
+          view.classList.toggle('active', view.id === targetId);
+        });
+      }
+
+      // --------- Upload logic (Apps Script bridge) ---------
       function handleFormSubmit() {
         const fileInput = document.getElementById('file-input');
         const file = fileInput.files[0];
-        
-        // Validazione base
+
         if (!file) {
-          updateStatus('Per favore, seleziona un file.', 'error');
+          updateStatus('Please choose a file first.', 'error');
           return;
         }
 
         const tz = document.getElementById('tz').value;
         const locale = document.getElementById('locale').value;
         const button = document.getElementById('submit-button');
-
-        // Disabilita il pulsante e mostra il caricamento
         button.disabled = true;
-        updateStatus('Caricamento file in corso...', 'loading');
+        updateStatus('Uploading through the bridge...', 'loading');
 
         const reader = new FileReader();
 
-        // Controlla il tipo di file
-        // Nota: '.json' non ha un tipo MIME standard, quindi controlliamo anche l'estensione
         if (file.type === 'application/json' || file.name.endsWith('.json')) {
-          
-          // --- È UN JSON: Leggi come testo ---
-          reader.onload = function(e) {
+          reader.onload = function (e) {
             const jsonContent = e.target.result;
             const formObject = {
               type: 'json',
-              content: jsonContent
-              // tz e locale non servono qui
+              content: jsonContent,
             };
-            // Chiama la funzione server generica
-            google.script.run
-              .withSuccessHandler(showSuccess)
-              .withFailureHandler(showError)
-              .processUpload(formObject);
+            google.script.run.withSuccessHandler(showSuccess).withFailureHandler(showError).processUpload(formObject);
           };
-          reader.onerror = function(e) {
+          reader.onerror = function () {
             showError(new Error('Impossibile leggere il file JSON.'));
           };
           reader.readAsText(file);
-
         } else if (file.type.startsWith('image/')) {
-          
-          // --- È UN'IMMAGINE: Leggi come Data URL (Base64) ---
-          reader.onload = function(e) {
-            const fileData = e.target.result; // Stringa "data:image/jpeg;base64,..."
+          reader.onload = function (e) {
+            const fileData = e.target.result;
             const formObject = {
               type: 'image',
-              content: fileData, // Questo è il Base64
+              content: fileData,
               tz: tz,
-              locale: locale
+              locale: locale,
             };
-            // Chiama la funzione server generica
-            google.script.run
-              .withSuccessHandler(showSuccess)
-              .withFailureHandler(showError)
-              .processUpload(formObject);
+            google.script.run.withSuccessHandler(showSuccess).withFailureHandler(showError).processUpload(formObject);
           };
-          reader.onerror = function(e) {
+          reader.onerror = function () {
             showError(new Error('Impossibile leggere il file immagine.'));
           };
           reader.readAsDataURL(file);
-
         } else {
-          showError(new Error('Tipo file non supportato. Seleziona .jpg, .png o .json.'));
+          showError(new Error('Unsupported file type. Please pick .jpg, .png, or .json.'));
           button.disabled = false;
         }
       }
 
-      /**
-       * Callback in caso di successo della chiamata server.
-       * @param {string} message - Il messaggio ritornato da processUpload.
-       */
       function showSuccess(message) {
         updateStatus(message, 'success');
         document.getElementById('submit-button').disabled = false;
-        document.getElementById('file-input').value = ''; // Resetta l'input file
+        document.getElementById('file-input').value = '';
       }
 
-      /**
-       * Callback in caso di errore della chiamata server.
-       * @param {Error} err - L'oggetto errore.
-       */
       function showError(err) {
-        updateStatus('Errore: ' + err.message, 'error');
+        updateStatus('Error: ' + err.message, 'error');
         document.getElementById('submit-button').disabled = false;
       }
 
-      /**
-       * Helper per aggiornare il messaggio di stato.
-       */
       function updateStatus(message, type) {
         const statusEl = document.getElementById('status');
         statusEl.textContent = message;
-        statusEl.className = type; // Applica la classe di stile
+        statusEl.className = 'status-text ' + type;
+      }
+
+      // --------- Optimization panel logic ---------
+      document.addEventListener('DOMContentLoaded', initOptimizationPanel);
+
+      function initOptimizationPanel() {
+        const defaultEvents = [
+          { id: '1', title: 'Project Planning', duration: 2, day: 'Monday', time: '09:00', type: 'work' },
+          { id: '2', title: 'Code Review', duration: 1, day: 'Monday', time: '14:00', type: 'work' },
+          { id: '3', title: 'Learning Session', duration: 1.5, day: 'Tuesday', time: '10:00', type: 'personal' },
+        ];
+
+        const optimizedSlots = [
+          { day: 'Wednesday', time: '11:30', event: 'Deep Focus Sprint' },
+          { day: 'Thursday', time: '09:00', event: 'Client Strategy' },
+          { day: 'Friday', time: '15:00', event: 'Recharge Ritual' },
+        ];
+
+        const state = {
+          events: [...defaultEvents],
+          isOptimizing: false,
+          optimizationComplete: false,
+        };
+
+        const startInput = document.getElementById('opt-start-date');
+        const endInput = document.getElementById('opt-end-date');
+        const addBtn = document.getElementById('opt-add-event');
+        const newEventInput = document.getElementById('opt-new-event');
+        const dayInput = document.getElementById('opt-day');
+        const timeInput = document.getElementById('opt-time');
+        const typeInput = document.getElementById('opt-type');
+        const optimizeBtn = document.getElementById('optimize-button');
+        const eventsList = document.getElementById('opt-events-list');
+        const resultsBox = document.getElementById('opt-results');
+        const calendarGrid = document.getElementById('calendar-grid');
+        const kpiBars = document.getElementById('kpi-bars');
+
+        const today = new Date();
+        const nextWeek = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+        startInput.value = today.toISOString().slice(0, 10);
+        endInput.value = nextWeek.toISOString().slice(0, 10);
+
+        function renderEvents() {
+          eventsList.innerHTML = '';
+          if (state.events.length === 0) {
+            const empty = document.createElement('p');
+            empty.textContent = 'Nessun evento evocato.';
+            empty.style.color = 'var(--muted)';
+            eventsList.appendChild(empty);
+            return;
+          }
+
+          state.events.forEach((event) => {
+            const row = document.createElement('div');
+            row.className = 'opt-event';
+            row.innerHTML = `
+              <div>
+                <strong>${event.title}</strong>
+                <small>${event.day} · ${event.time} · ${event.duration}h</small>
+              </div>
+            `;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.textContent = '×';
+            remove.addEventListener('click', () => {
+              state.events = state.events.filter((e) => e.id !== event.id);
+              renderEvents();
+              updateOptimizeButton();
+              renderCalendar();
+              renderKPIs();
+            });
+            row.appendChild(remove);
+            eventsList.appendChild(row);
+          });
+        }
+
+        function updateOptimizeButton() {
+          optimizeBtn.disabled = state.events.length === 0 || state.isOptimizing;
+          optimizeBtn.textContent = state.isOptimizing ? 'Consulting...' : 'Start Optimization';
+        }
+
+        function renderResults() {
+          resultsBox.innerHTML = '';
+          if (state.isOptimizing) {
+            const loading = document.createElement('div');
+            loading.textContent = 'Calcolo in corso...';
+            resultsBox.appendChild(loading);
+            return;
+          }
+          if (!state.optimizationComplete) {
+            const idle = document.createElement('div');
+            idle.textContent = 'In attesa di un responso dell’oracolo.';
+            idle.style.color = 'var(--muted)';
+            resultsBox.appendChild(idle);
+            return;
+          }
+          optimizedSlots.forEach((slot) => {
+            const block = document.createElement('div');
+            block.className = 'opt-slot';
+            block.innerHTML = `<strong>${slot.event}</strong><br><small>${slot.day} · ${slot.time}</small>`;
+            resultsBox.appendChild(block);
+          });
+        }
+
+        function renderCalendar() {
+          const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+          calendarGrid.innerHTML = '';
+          days.forEach((day) => {
+            const column = document.createElement('div');
+            column.className = 'calendar-day';
+            const title = document.createElement('h4');
+            title.textContent = day.slice(0, 3);
+            column.appendChild(title);
+            const dayEvents = state.events.filter((event) => event.day === day);
+            if (dayEvents.length === 0) {
+              const empty = document.createElement('p');
+              empty.textContent = '—';
+              empty.style.color = 'var(--muted)';
+              column.appendChild(empty);
+            } else {
+              dayEvents
+                .sort((a, b) => a.time.localeCompare(b.time))
+                .forEach((event) => {
+                  const chip = document.createElement('div');
+                  chip.className = 'calendar-chip';
+                  chip.textContent = `${event.time} · ${event.title}`;
+                  column.appendChild(chip);
+                });
+            }
+            calendarGrid.appendChild(column);
+          });
+        }
+
+        function renderKPIs() {
+          const summary = state.events.reduce(
+            (acc, event) => {
+              const duration = Number(event.duration) || 1;
+              acc[event.type] = (acc[event.type] || 0) + duration;
+              acc.total += duration;
+              return acc;
+            },
+            { work: 0, rest: 0, personal: 0, total: 0 }
+          );
+
+          const kpis = [
+            { label: 'Productivity', value: Math.min(100, Math.round((summary.work / (summary.total || 1)) * 100)) },
+            { label: 'Rest Balance', value: Math.min(100, Math.round((summary.rest / (summary.total || 1)) * 100)) },
+            { label: 'Personal Growth', value: Math.min(100, Math.round((summary.personal / (summary.total || 1)) * 100)) },
+          ];
+
+          kpiBars.innerHTML = '';
+          kpis.forEach((kpi) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'kpi-bar';
+            wrap.innerHTML = `<div style="display:flex;justify-content:space-between;">
+              <span>${kpi.label}</span>
+              <strong>${kpi.value}%</strong>
+            </div>`;
+            const track = document.createElement('div');
+            track.className = 'kpi-bar-track';
+            const fill = document.createElement('div');
+            fill.className = 'kpi-bar-fill';
+            fill.style.width = `${kpi.value}%`;
+            track.appendChild(fill);
+            wrap.appendChild(track);
+            kpiBars.appendChild(wrap);
+          });
+        }
+
+        addBtn.addEventListener('click', () => {
+          const value = newEventInput.value.trim();
+          if (!value) return;
+          state.events.push({
+            id: Date.now().toString(),
+            title: value,
+            duration: 1,
+            day: dayInput.value,
+            time: timeInput.value,
+            type: typeInput.value,
+          });
+          newEventInput.value = '';
+          renderEvents();
+          updateOptimizeButton();
+          renderCalendar();
+          renderKPIs();
+          state.optimizationComplete = false;
+          renderResults();
+        });
+
+        newEventInput.addEventListener('keypress', (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            addBtn.click();
+          }
+        });
+
+        optimizeBtn.addEventListener('click', () => {
+          if (state.events.length === 0 || state.isOptimizing) return;
+          state.isOptimizing = true;
+          state.optimizationComplete = false;
+          updateOptimizeButton();
+          renderResults();
+
+          setTimeout(() => {
+            state.isOptimizing = false;
+            state.optimizationComplete = true;
+            updateOptimizeButton();
+            renderResults();
+          }, 2200);
+        });
+
+        renderEvents();
+        updateOptimizeButton();
+        renderResults();
+        renderCalendar();
+        renderKPIs();
+      }
+
+      /**
+       * Simple optimization panel logic (plain JS version of the React component).
+       */
+      document.addEventListener('DOMContentLoaded', initOptimizationPanel);
+
+      function initOptimizationPanel() {
+        const defaultEvents = [
+          { id: '1', title: 'Project Planning', duration: '2h' },
+          { id: '2', title: 'Code Review', duration: '1h' },
+          { id: '3', title: 'Learning Session', duration: '1.5h' }
+        ];
+
+        const optimizedSlots = [
+          { day: 'Lunedì', time: '09:00', event: 'Project Planning' },
+          { day: 'Lunedì', time: '14:00', event: 'Code Review' },
+          { day: 'Martedì', time: '10:00', event: 'Learning Session' }
+        ];
+
+        const state = {
+          events: defaultEvents.slice(),
+          isOptimizing: false,
+          optimizationComplete: false
+        };
+
+        const startInput = document.getElementById('opt-start-date');
+        const endInput = document.getElementById('opt-end-date');
+        const addBtn = document.getElementById('opt-add-event');
+        const newEventInput = document.getElementById('opt-new-event');
+        const optimizeBtn = document.getElementById('optimize-button');
+        const eventsList = document.getElementById('opt-events-list');
+        const resultsBox = document.getElementById('opt-results');
+
+        const today = new Date();
+        const nextWeek = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+        startInput.value = today.toISOString().slice(0, 10);
+        endInput.value = nextWeek.toISOString().slice(0, 10);
+
+        function renderEvents() {
+          eventsList.innerHTML = '';
+          if (state.events.length === 0) {
+            const empty = document.createElement('p');
+            empty.textContent = 'Nessun evento.';
+            empty.style.color = '#777';
+            eventsList.appendChild(empty);
+            return;
+          }
+          state.events.forEach(event => {
+            const row = document.createElement('div');
+            row.className = 'opt-event';
+            row.innerHTML = `
+              <div>
+                <strong>${event.title}</strong><br>
+                <small>${event.duration}</small>
+              </div>
+              <button type="button" aria-label="Rimuovi">×</button>
+            `;
+            row.querySelector('button').addEventListener('click', () => {
+              state.events = state.events.filter(e => e.id !== event.id);
+              renderEvents();
+              updateOptimizeButton();
+            });
+            eventsList.appendChild(row);
+          });
+        }
+
+        function updateOptimizeButton() {
+          optimizeBtn.disabled = state.events.length === 0 || state.isOptimizing;
+          optimizeBtn.textContent = state.isOptimizing ? 'In corso...' : 'Ottimizza';
+        }
+
+        function renderResults() {
+          resultsBox.innerHTML = '';
+          if (state.isOptimizing) {
+            resultsBox.textContent = 'Calcolo in corso...';
+            resultsBox.style.color = '#4285F4';
+            return;
+          }
+          if (!state.optimizationComplete) {
+            resultsBox.textContent = 'In attesa di ottimizzazione.';
+            resultsBox.style.color = '#777';
+            return;
+          }
+          resultsBox.style.color = '#333';
+          optimizedSlots.forEach(slot => {
+            const block = document.createElement('div');
+            block.className = 'opt-slot';
+            block.innerHTML = `<strong>${slot.event}</strong><br><small>${slot.day} · ${slot.time}</small>`;
+            resultsBox.appendChild(block);
+          });
+        }
+
+        addBtn.addEventListener('click', () => {
+          const value = newEventInput.value.trim();
+          if (!value) return;
+          state.events.push({ id: Date.now().toString(), title: value, duration: '1h' });
+          newEventInput.value = '';
+          renderEvents();
+          updateOptimizeButton();
+          state.optimizationComplete = false;
+          renderResults();
+        });
+
+        newEventInput.addEventListener('keypress', (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            addBtn.click();
+          }
+        });
+
+        optimizeBtn.addEventListener('click', () => {
+          if (state.events.length === 0 || state.isOptimizing) return;
+          state.isOptimizing = true;
+          state.optimizationComplete = false;
+          updateOptimizeButton();
+          renderResults();
+
+          setTimeout(() => {
+            state.isOptimizing = false;
+            state.optimizationComplete = true;
+            updateOptimizeButton();
+            renderResults();
+          }, 2000);
+        });
+
+        renderEvents();
+        updateOptimizeButton();
+        renderResults();
       }
     </script>
   </body>

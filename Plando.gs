@@ -136,7 +136,7 @@ var Plando = (function() {
         var downloadUrl = _resolveTelegramFileUrl(bestSize.file_id);
         var ocrFn = null;
 
-        if (typeof Glando !== "undefined" && typeof Glando.sendSeendo === "function") {
+        if (Glando && typeof Glando.sendSeendo === "function") {
           ocrFn = Glando.sendSeendo;
         } else if (typeof sendSeendo === "function") {
           // Fallback: funzione globale definita in Seendo.gs
