@@ -34,30 +34,19 @@ var Plando = (function() {
       return ContentService.createTextOutput(JSON.stringify({ ok: true, info: "No chat_id" })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    try {
-      var text = _extractTextCandidate(message);
-      var document = _extractDocumentCandidate(message);
-      var photo = _extractPhotoCandidate(message);
+    var text = _extractTextCandidate(message);
+    var document = _extractDocumentCandidate(message);
+    var photo = _extractPhotoCandidate(message);
 
-      if (photo) {
-        _handlePhoto(chat_id, photo);
-      } else if (document) {
-        _handleDocument(chat_id, document, message.caption);
-      } else if (text) {
-        _handleText(chat_id, text);
-      } else {
-        // Messaggio non gestito (es. sticker)
-        // sendMessage(chat_id, "ℹ️ Tipo di messaggio non supportato.");
-      }
-
-    } catch (err) {
-      console.error("Errore in Plando.handleTelegramPost: " + err.message, err.stack);
-      try {
-        // Tenta di inviare l'errore all'utente
-        sendMessage(chat_id, "❌ Si è verificato un errore critico: " + err.message);
-      } catch (sendErr) {
-        console.error("Impossibile inviare il messaggio di errore: " + sendErr.message);
-      }
+    if (photo) {
+      _handlePhoto(chat_id, photo);
+    } else if (document) {
+      _handleDocument(chat_id, document, message.caption);
+    } else if (text) {
+      _handleText(chat_id, text);
+    } else {
+      // Messaggio non gestito (es. sticker)
+      // sendMessage(chat_id, "ℹ️ Tipo di messaggio non supportato.");
     }
     
     // Rispondi a Telegram che l'update è stato ricevuto e processato.
@@ -144,8 +133,21 @@ var Plando = (function() {
     var bestSize = photoSizes[photoSizes.length - 1]; 
     if (bestSize && bestSize.file_id) {
       try {
-        // Assumiamo che Glando.gs contenga la funzione sendSeendo per l'OCR
-        var ocrResult = Glando.sendSeendo(bestSize); 
+        var downloadUrl = _resolveTelegramFileUrl(bestSize.file_id);
+        var ocrFn = null;
+
+        if (typeof Glando !== "undefined" && typeof Glando.sendSeendo === "function") {
+          ocrFn = Glando.sendSeendo;
+        } else if (typeof sendSeendo === "function") {
+          // Fallback: funzione globale definita in Seendo.gs
+          ocrFn = sendSeendo;
+        }
+
+        if (!ocrFn) {
+          throw new Error("Funzione sendSeendo non disponibile.");
+        }
+
+        var ocrResult = ocrFn(downloadUrl);
         if (ocrResult && typeof ocrResult === "string") {
           sendMessage(chat_id, ocrResult);
         } else {
@@ -261,6 +263,20 @@ var Plando = (function() {
     blob.setName(filePath.split('/').pop()); 
     
     return blob;
+  }
+
+  function _resolveTelegramFileUrl(fileId) {
+    if (!fileId) {
+      throw new Error("file_id mancante per il recupero dell'immagine");
+    }
+
+    var fileResp = UrlFetchApp.fetch(telegramUrl + "/getFile?file_id=" + encodeURIComponent(fileId));
+    var fileData = JSON.parse(fileResp.getContentText());
+    if (!fileData.ok || !(fileData.result && fileData.result.file_path)) {
+      throw new Error("Risposta non valida da Telegram (getFile).");
+    }
+
+    return "https://api.telegram.org/file/bot" + token + "/" + fileData.result.file_path;
   }
 
   // --- Funzioni di utilità per il parsing (Spostate) ---
