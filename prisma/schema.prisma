@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folders  Folder[]
+  events   Event[]
+  chips    Chip[]
+  palettes Palette[]
+}
+
+model Folder {
+  id          String   @id @default(cuid())
+  name        String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  visualStyle Json?
+  color       String?
+  icon        String?
+  createdAt   DateTime @default(now())
+
+  events Event[]
+  chips  Chip[]
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  isFlexible  Boolean  @default(false)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  folderId    String?
+  folder      Folder?  @relation(fields: [folderId], references: [id])
+  visualStyle Json?
+  externalId  String?
+  source      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Chip {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  area        String    @default("weekly")
+  dayTarget   DateTime?
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  folderId    String?
+  folder      Folder?   @relation(fields: [folderId], references: [id])
+  visualStyle Json?
+  weekNumber  Int?
+  year        Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Palette {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  colors    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

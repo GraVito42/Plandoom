@@ -4,6 +4,32 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+  /* Palette navy — blu profondo */
+  --color-navy-950: #050818;
+  --color-navy-900: #0a1628;
+  --color-navy-800: #0f2044;
+  --color-navy-700: #162d5e;
+  --color-navy-600: #1e3a78;
+  --color-navy-500: #2a4d96;
+
+  /* Palette smoke — grigio fumo */
+  --color-smoke-900: #1a1c1e;
+  --color-smoke-800: #23262a;
+  --color-smoke-700: #2e3236;
+  --color-smoke-600: #3a3f45;
+  --color-smoke-500: #484e55;
+  --color-smoke-400: #6b7280;
+  --color-smoke-300: #9ca3af;
+  --color-smoke-200: #d1d5db;
+  --color-smoke-100: #f3f4f6;
+
+  /* Palette doom — accenti esotici */
+  --color-doom-gold: #c9a84c;
+  --color-doom-ember: #8b3a2a;
+  --color-doom-rune: #4a2d6b;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
