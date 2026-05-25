@@ -34,7 +34,7 @@ export default function WeeklySidebar() {
         <ChipArea
           area="weekly"
           chips={chips}
-          draggable={false}
+          draggable
           weekNumber={weekNumber}
           year={year}
         />

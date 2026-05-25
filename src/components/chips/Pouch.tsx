@@ -42,7 +42,7 @@ export default function Pouch({ onClose, onSchedule }: PouchProps) {
         <ChipArea
           area="pouch"
           chips={chips}
-          draggable={false}
+          draggable
           onSchedule={onSchedule}
         />
       </div>

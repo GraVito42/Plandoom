@@ -13,7 +13,7 @@ interface ChipProps {
 export default function Chip({ chip, draggable = false, onSchedule, onDelete }: ChipProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `chip-${chip.id}`,
-    data: { type: "chip", chipId: chip.id },
+    data: { type: "chip", chipId: chip.id, title: chip.title },
     disabled: !draggable,
   })
 
