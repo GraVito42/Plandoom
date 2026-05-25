@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs"
+import Providers from "@/components/Providers"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -28,26 +29,28 @@ export default function RootLayout({
     >
       <body className="h-screen flex flex-col bg-navy-950 text-smoke-100 overflow-hidden">
         <ClerkProvider>
-          {/* Topbar globale */}
-          <header className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-smoke-800 bg-navy-950 z-20">
-            <span className="text-lg font-bold tracking-[0.25em] text-doom-gold select-none">
-              PLANDOOM
-            </span>
-            <div className="flex items-center gap-3">
-              <Show when="signed-out">
-                <SignInButton />
-                <SignUpButton />
-              </Show>
-              <Show when="signed-in">
-                <UserButton />
-              </Show>
-            </div>
-          </header>
+          <Providers>
+            {/* Topbar globale */}
+            <header className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-smoke-800 bg-navy-950 z-20">
+              <span className="text-lg font-bold tracking-[0.25em] text-doom-gold select-none">
+                PLANDOOM
+              </span>
+              <div className="flex items-center gap-3">
+                <Show when="signed-out">
+                  <SignInButton />
+                  <SignUpButton />
+                </Show>
+                <Show when="signed-in">
+                  <UserButton />
+                </Show>
+              </div>
+            </header>
 
-          {/* Area principale sotto l'header */}
-          <div className="flex-1 overflow-hidden">
-            {children}
-          </div>
+            {/* Area principale sotto l'header */}
+            <div className="flex-1 overflow-hidden">
+              {children}
+            </div>
+          </Providers>
         </ClerkProvider>
       </body>
     </html>
