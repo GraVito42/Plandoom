@@ -1,49 +1,48 @@
-import { ORA_INIZIO, PX_PER_ORA } from "@/hooks/useGrid"
+import { HOUR_START, PX_PER_HOUR } from "@/hooks/useGrid"
 import type { ApiEvent } from "@/types"
 import EventBlock from "../events/EventBlock"
 import TimeSlot from "./TimeSlot"
 
 interface DayColumnProps {
-  data: Date
-  ore: number[]
-  eventi: ApiEvent[]
-  isOggi: boolean
-  onSlotClick: (ora: number) => void
+  date: Date
+  hours: number[]
+  events: ApiEvent[]
+  isToday: boolean
+  onSlotClick: (hour: number) => void
   onEventClick: (ev: ApiEvent) => void
 }
 
 export default function DayColumn({
-  data,
-  ore,
-  eventi,
-  isOggi,
+  date,
+  hours,
+  events,
+  isToday,
   onSlotClick,
   onEventClick,
 }: DayColumnProps) {
-  // Posizione della linea ora corrente (solo per oggi)
   const now = new Date()
-  const minutiDallInizio = isOggi
-    ? (now.getHours() - ORA_INIZIO) * 60 + now.getMinutes()
+  const minutesFromStart = isToday
+    ? (now.getHours() - HOUR_START) * 60 + now.getMinutes()
     : -1
-  const lineaTop =
-    minutiDallInizio >= 0 ? minutiDallInizio * (PX_PER_ORA / 60) : -1
+  const lineTop =
+    minutesFromStart >= 0 ? minutesFromStart * (PX_PER_HOUR / 60) : -1
 
   return (
     <div
-      className={`flex-1 border-l border-smoke-800 min-w-0 relative ${
-        isOggi ? "bg-navy-900/20" : ""
+      className={`flex-1 border-l border-smoke-700 min-w-0 relative ${
+        isToday ? "bg-navy-900/20" : ""
       }`}
     >
-      {/* Slot orari (sfondo cliccabile) */}
-      {ore.map((ora) => (
-        <TimeSlot key={ora} ora={ora} onClick={() => onSlotClick(ora)} />
+      {/* Clickable hour slots */}
+      {hours.map((hour) => (
+        <TimeSlot key={hour} hour={hour} onClick={() => onSlotClick(hour)} />
       ))}
 
-      {/* Linea ora corrente */}
-      {lineaTop >= 0 && (
+      {/* Current time indicator */}
+      {lineTop >= 0 && (
         <div
           className="absolute left-0 right-0 z-10 pointer-events-none"
-          style={{ top: lineaTop }}
+          style={{ top: lineTop }}
         >
           <div className="relative">
             <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-doom-gold" />
@@ -52,8 +51,8 @@ export default function DayColumn({
         </div>
       )}
 
-      {/* Blocchi evento */}
-      {eventi.map((ev) => (
+      {/* Event blocks */}
+      {events.map((ev) => (
         <EventBlock key={ev.id} event={ev} onClick={() => onEventClick(ev)} />
       ))}
     </div>

@@ -4,10 +4,10 @@ import { useRef, useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   useGrid,
-  NOMI_GIORNI,
-  ORA_INIZIO,
-  ORA_FINE,
-  PX_PER_ORA,
+  DAY_NAMES,
+  HOUR_START,
+  HOUR_END,
+  PX_PER_HOUR,
 } from "@/hooks/useGrid"
 import type { ApiEvent } from "@/types"
 import DayColumn from "./DayColumn"
@@ -15,21 +15,21 @@ import EventEditor from "../events/EventEditor"
 
 interface EditorState {
   open: boolean
-  data: Date | null
-  ora: number | null
+  date: Date | null
+  hour: number | null
   eventToEdit: ApiEvent | null
 }
 
 export default function WeekGrid() {
   const {
-    inizioSettimana,
-    fineSettimana,
-    giorniSettimana,
-    vaiSettimanaPrec,
-    vaiSettimanaSucc,
-    vaiAOggi,
-    isOggi,
-    formatRangeSettimana,
+    weekStart,
+    weekEnd,
+    weekDays,
+    prevWeek,
+    nextWeek,
+    goToToday,
+    isToday,
+    formatWeekRange,
   } = useGrid()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -37,144 +37,142 @@ export default function WeekGrid() {
 
   const [editor, setEditor] = useState<EditorState>({
     open: false,
-    data: null,
-    ora: null,
+    date: null,
+    hour: null,
     eventToEdit: null,
   })
 
-  const ore = Array.from(
-    { length: ORA_FINE - ORA_INIZIO },
-    (_, i) => i + ORA_INIZIO
+  const hours = Array.from(
+    { length: HOUR_END - HOUR_START },
+    (_, i) => i + HOUR_START
   )
 
-  // ── Fetch eventi della settimana corrente ──
-  const { data: eventi = [] } = useQuery<ApiEvent[]>({
-    queryKey: ["events", inizioSettimana.toISOString()],
+  const { data: events = [] } = useQuery<ApiEvent[]>({
+    queryKey: ["events", weekStart.toISOString()],
     queryFn: async () => {
       const res = await fetch(
-        `/api/events?from=${inizioSettimana.toISOString()}&to=${fineSettimana.toISOString()}`
+        `/api/events?from=${weekStart.toISOString()}&to=${weekEnd.toISOString()}`
       )
-      if (!res.ok) throw new Error("Errore nel caricamento degli eventi")
+      if (!res.ok) throw new Error("Failed to load events")
       return res.json() as Promise<ApiEvent[]>
     },
   })
 
-  // ── Scroll automatico all'ora corrente al primo render ──
   useEffect(() => {
     if (!scrollRef.current) return
-    const ora = new Date().getHours()
-    const minuti = new Date().getMinutes()
-    if (ora >= ORA_INIZIO && ora < ORA_FINE) {
-      const offset = (ora - ORA_INIZIO) * PX_PER_ORA + minuti * (PX_PER_ORA / 60)
+    const hour = new Date().getHours()
+    const minutes = new Date().getMinutes()
+    if (hour >= HOUR_START && hour < HOUR_END) {
+      const offset = (hour - HOUR_START) * PX_PER_HOUR + minutes * (PX_PER_HOUR / 60)
       scrollRef.current.scrollTop = Math.max(0, offset - 120)
     }
   }, [])
 
-  // ── Filtra gli eventi per un dato giorno ──
-  function eventiDelGiorno(data: Date): ApiEvent[] {
-    return eventi.filter((ev) => {
+  function eventsForDay(date: Date): ApiEvent[] {
+    return events.filter((ev) => {
       const start = new Date(ev.startTime)
       return (
-        start.getFullYear() === data.getFullYear() &&
-        start.getMonth() === data.getMonth() &&
-        start.getDate() === data.getDate()
+        start.getFullYear() === date.getFullYear() &&
+        start.getMonth() === date.getMonth() &&
+        start.getDate() === date.getDate()
       )
     })
   }
 
-  function apriCreazione(data: Date, ora: number) {
-    setEditor({ open: true, data, ora, eventToEdit: null })
+  function openCreate(date: Date, hour: number) {
+    setEditor({ open: true, date, hour, eventToEdit: null })
   }
 
-  function apriModifica(ev: ApiEvent) {
-    setEditor({ open: true, data: null, ora: null, eventToEdit: ev })
+  function openEdit(ev: ApiEvent) {
+    setEditor({ open: true, date: null, hour: null, eventToEdit: ev })
   }
 
-  function chiudiEditor() {
-    setEditor({ open: false, data: null, ora: null, eventToEdit: null })
+  function closeEditor() {
+    setEditor({ open: false, date: null, hour: null, eventToEdit: null })
   }
 
-  async function onEventSalvato() {
+  async function onEventSaved() {
     await queryClient.invalidateQueries({ queryKey: ["events"] })
-    chiudiEditor()
+    closeEditor()
   }
 
-  async function onEventEliminato(id: string) {
+  async function onEventDeleted(id: string) {
     await fetch(`/api/events/${id}`, { method: "DELETE" })
     await queryClient.invalidateQueries({ queryKey: ["events"] })
-    chiudiEditor()
+    closeEditor()
   }
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-navy-950">
 
-      {/* ── Barra navigazione settimana ── */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-smoke-800 shrink-0 bg-navy-950">
+      {/* Week navigation bar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-smoke-700 shrink-0 bg-navy-950">
         <div className="flex items-center gap-1">
           <button
-            onClick={vaiSettimanaPrec}
+            onClick={prevWeek}
             className="px-3 py-1.5 text-sm text-smoke-300 hover:text-doom-gold hover:bg-navy-800 rounded transition-colors"
           >
             ←
           </button>
           <button
-            onClick={vaiAOggi}
-            className="px-3 py-1.5 text-xs text-smoke-400 hover:text-doom-gold border border-smoke-700 hover:border-doom-gold/50 rounded transition-colors"
+            onClick={goToToday}
+            className="px-3 py-1.5 text-xs text-smoke-300 hover:text-doom-gold border border-smoke-600 hover:border-doom-gold/50 rounded transition-colors"
           >
-            Oggi
+            Today
           </button>
           <button
-            onClick={vaiSettimanaSucc}
+            onClick={nextWeek}
             className="px-3 py-1.5 text-sm text-smoke-300 hover:text-doom-gold hover:bg-navy-800 rounded transition-colors"
           >
             →
           </button>
         </div>
-        <span className="text-sm font-medium text-smoke-300 tracking-wide">
-          {formatRangeSettimana()}
+        <span className="text-sm font-medium text-smoke-200 tracking-wide">
+          {formatWeekRange()}
         </span>
-        <div className="w-28" /> {/* Bilancia il layout */}
+        <div className="w-28" />
       </div>
 
-      {/* ── Intestazione: nomi giorni + Daily Notes ── */}
+      {/* Day headers + Daily Notes row */}
       <div className="flex shrink-0 bg-navy-950 border-b border-smoke-700 z-10">
-        <div className="w-16 shrink-0 border-r border-smoke-800" />
+        {/* Spacer above time labels — matches scrollable area gutter */}
+        <div className="w-16 shrink-0 border-r border-smoke-700" />
 
-        {giorniSettimana.map((data, i) => {
-          const oggi = isOggi(data)
+        {weekDays.map((date, i) => {
+          const today = isToday(date)
           return (
             <div
               key={i}
-              className={`flex-1 flex flex-col border-l border-smoke-800 min-w-0 ${
-                oggi ? "bg-navy-900/40" : ""
+              className={`flex-1 flex flex-col border-l border-smoke-700 min-w-0 ${
+                today ? "bg-navy-900/40" : ""
               }`}
             >
-              {/* Nome giorno + numero */}
+              {/* Day name + number */}
               <div
-                className={`py-2 text-center border-b border-smoke-800 ${
-                  oggi ? "bg-navy-800/60" : ""
+                className={`py-2 text-center border-b border-smoke-700 ${
+                  today ? "bg-navy-800/60" : ""
                 }`}
               >
                 <span
                   className={`text-xs font-semibold tracking-widest uppercase ${
-                    oggi ? "text-doom-gold" : "text-smoke-400"
+                    today ? "text-doom-gold" : "text-smoke-300"
                   }`}
                 >
-                  {NOMI_GIORNI[i]}
+                  {DAY_NAMES[i]}
                 </span>
                 <span
                   className={`block text-xs mt-0.5 ${
-                    oggi ? "text-doom-gold/60" : "text-smoke-600"
+                    today ? "text-doom-gold/70" : "text-smoke-400"
                   }`}
                 >
-                  {data.getDate()}
+                  {date.getDate()}
                 </span>
               </div>
 
-              {/* Area Note Giornaliere */}
+              {/* Daily Notes area */}
               <div className="h-20 bg-navy-900/30 px-2 py-1.5">
-                <p className="text-xs text-smoke-700 italic select-none">
-                  Note...
+                <p className="text-xs text-smoke-500 italic select-none">
+                  Notes...
                 </p>
               </div>
             </div>
@@ -182,45 +180,48 @@ export default function WeekGrid() {
         })}
       </div>
 
-      {/* ── Corpo scrollabile ── */}
-      <div ref={scrollRef} className="flex flex-1 overflow-y-auto">
-        {/* Colonna label orari */}
-        <div className="w-16 shrink-0 border-r border-smoke-800 bg-navy-950">
-          {ore.map((ora) => (
+      {/* Scrollable body — scrollbar-gutter:stable prevents header misalignment */}
+      <div
+        ref={scrollRef}
+        className="flex flex-1 overflow-y-auto [scrollbar-gutter:stable]"
+      >
+        {/* Hour labels column */}
+        <div className="w-16 shrink-0 border-r border-smoke-700 bg-navy-950">
+          {hours.map((hour) => (
             <div
-              key={ora}
-              className="h-16 flex items-start justify-end pr-3 pt-1 border-b border-smoke-800/30"
+              key={hour}
+              className="h-16 flex items-start justify-end pr-3 pt-1 border-b border-smoke-700/40"
             >
-              <span className="text-xs text-smoke-600">
-                {String(ora).padStart(2, "0")}:00
+              <span className="text-xs text-smoke-400">
+                {String(hour).padStart(2, "0")}:00
               </span>
             </div>
           ))}
         </div>
 
-        {/* Colonne dei 7 giorni */}
-        {giorniSettimana.map((data, i) => (
+        {/* 7 day columns */}
+        {weekDays.map((date, i) => (
           <DayColumn
             key={i}
-            data={data}
-            ore={ore}
-            eventi={eventiDelGiorno(data)}
-            isOggi={isOggi(data)}
-            onSlotClick={(ora) => apriCreazione(data, ora)}
-            onEventClick={apriModifica}
+            date={date}
+            hours={hours}
+            events={eventsForDay(date)}
+            isToday={isToday(date)}
+            onSlotClick={(hour) => openCreate(date, hour)}
+            onEventClick={openEdit}
           />
         ))}
       </div>
 
-      {/* ── Modale evento ── */}
+      {/* Event modal */}
       {editor.open && (
         <EventEditor
-          data={editor.data}
-          oraInizio={editor.ora}
+          date={editor.date}
+          startHour={editor.hour}
           eventToEdit={editor.eventToEdit}
-          onSave={onEventSalvato}
-          onDelete={onEventEliminato}
-          onClose={chiudiEditor}
+          onSave={onEventSaved}
+          onDelete={onEventDeleted}
+          onClose={closeEditor}
         />
       )}
     </div>

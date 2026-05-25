@@ -1,4 +1,4 @@
-import { ORA_INIZIO, PX_PER_ORA } from "@/hooks/useGrid"
+import { HOUR_START, PX_PER_HOUR } from "@/hooks/useGrid"
 import type { ApiEvent } from "@/types"
 
 interface EventBlockProps {
@@ -6,8 +6,7 @@ interface EventBlockProps {
   onClick: () => void
 }
 
-// Formatta ora:minuti in formato HH:MM
-function formatOra(date: Date): string {
+function formatTime(date: Date): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
 }
 
@@ -15,12 +14,11 @@ export default function EventBlock({ event, onClick }: EventBlockProps) {
   const start = new Date(event.startTime)
   const end = new Date(event.endTime)
 
-  // Posizionamento verticale rispetto all'ORA_INIZIO della griglia
-  const minutiDallInizio = (start.getHours() - ORA_INIZIO) * 60 + start.getMinutes()
-  const durataMinuti = Math.max(15, (end.getTime() - start.getTime()) / 60_000)
+  const minutesFromStart = (start.getHours() - HOUR_START) * 60 + start.getMinutes()
+  const durationMinutes = Math.max(15, (end.getTime() - start.getTime()) / 60_000)
 
-  const top = minutiDallInizio * (PX_PER_ORA / 60)
-  const height = Math.max(24, durataMinuti * (PX_PER_ORA / 60))
+  const top = minutesFromStart * (PX_PER_HOUR / 60)
+  const height = Math.max(24, durationMinutes * (PX_PER_HOUR / 60))
 
   return (
     <button
@@ -33,8 +31,8 @@ export default function EventBlock({ event, onClick }: EventBlockProps) {
           {event.title}
         </p>
         {height > 32 && (
-          <p className="text-[10px] text-smoke-400 truncate">
-            {formatOra(start)} – {formatOra(end)}
+          <p className="text-[10px] text-smoke-300 truncate">
+            {formatTime(start)} – {formatTime(end)}
           </p>
         )}
       </div>
