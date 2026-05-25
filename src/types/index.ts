@@ -1,5 +1,3 @@
-// Tipi condivisi tra client e server
-
 export type VisualStyle = {
   shape: "rectangle" | "rounded" | "pill"
   frameColor: string
@@ -14,7 +12,6 @@ export type EventSource = "plandoom" | "google" | "notion"
 
 export type ChipArea = "daily" | "weekly" | "pouch"
 
-// Risposta API per un evento (date serializzate come stringhe ISO)
 export type ApiEvent = {
   id: string
   title: string
@@ -27,6 +24,21 @@ export type ApiEvent = {
   visualStyle: unknown
   externalId: string | null
   source: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiChip = {
+  id: string
+  title: string
+  description: string | null
+  area: ChipArea
+  dayTarget: string | null
+  userId: string
+  folderId: string | null
+  visualStyle: unknown
+  weekNumber: number | null
+  year: number | null
   createdAt: string
   updatedAt: string
 }

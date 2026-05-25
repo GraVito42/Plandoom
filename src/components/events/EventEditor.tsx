@@ -7,6 +7,8 @@ interface EventEditorProps {
   date: Date | null
   startHour: number | null
   eventToEdit: ApiEvent | null
+  prefillTitle?: string
+  prefillDescription?: string
   onSave: () => Promise<void>
   onDelete: (id: string) => Promise<void>
   onClose: () => void
@@ -24,6 +26,8 @@ export default function EventEditor({
   date,
   startHour,
   eventToEdit,
+  prefillTitle,
+  prefillDescription,
   onSave,
   onDelete,
   onClose,
@@ -48,8 +52,8 @@ export default function EventEditor({
     ? `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`
     : "10:00"
 
-  const [title, setTitle] = useState(eventToEdit?.title ?? "")
-  const [description, setDescription] = useState(eventToEdit?.description ?? "")
+  const [title, setTitle] = useState(eventToEdit?.title ?? prefillTitle ?? "")
+  const [description, setDescription] = useState(eventToEdit?.description ?? prefillDescription ?? "")
   const [eventDate, setEventDate] = useState(defaultDate)
   const [startTime, setStartTime] = useState(defaultStart)
   const [endTime, setEndTime] = useState(defaultEnd)

@@ -18,15 +18,19 @@ import {
   HOUR_END,
   PX_PER_HOUR,
 } from "@/hooks/useGrid"
-import type { ApiEvent } from "@/types"
+import type { ApiEvent, ApiChip } from "@/types"
 import DayColumn from "./DayColumn"
 import EventEditor from "../events/EventEditor"
+import ChipArea from "../chips/ChipArea"
+import Pouch from "../chips/Pouch"
 
 interface EditorState {
   open: boolean
   date: Date | null
   hour: number | null
   eventToEdit: ApiEvent | null
+  prefillTitle?: string
+  prefillDescription?: string
 }
 
 interface ResizeState {
@@ -38,6 +42,10 @@ interface ResizeState {
 
 function snap15(minutes: number): number {
   return Math.round(minutes / 15) * 15
+}
+
+function toDateStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
 export default function WeekGrid() {
@@ -61,13 +69,14 @@ export default function WeekGrid() {
     hour: null,
     eventToEdit: null,
   })
+  const [pouchOpen, setPouchOpen] = useState(false)
 
   // Drag-to-move state
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeEvent, setActiveEvent] = useState<ApiEvent | null>(null)
   const [activeDims, setActiveDims] = useState<{ width: number; height: number } | null>(null)
 
-  // Resize state — stored in both state (for render) and ref (to avoid stale closure in handler)
+  // Resize state (ref = stale-closure-safe handler, state = render)
   const [resizing, setResizingState] = useState<ResizeState | null>(null)
   const resizingRef = useRef<ResizeState | null>(null)
   function setResizing(val: ResizeState | null) {
@@ -75,15 +84,16 @@ export default function WeekGrid() {
     setResizingState(val)
   }
 
+  // Chip scheduled via pouch/weekly "Schedule" button — track to delete after save
+  const [chipToConvert, setChipToConvert] = useState<ApiChip | null>(null)
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  const hours = Array.from(
-    { length: HOUR_END - HOUR_START },
-    (_, i) => i + HOUR_START
-  )
+  const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => i + HOUR_START)
 
+  // ── Events query ─────────────────────────────────────────────────────────────
   const { data: events = [] } = useQuery<ApiEvent[]>({
     queryKey: ["events", weekStart.toISOString()],
     queryFn: async () => {
@@ -92,6 +102,18 @@ export default function WeekGrid() {
       )
       if (!res.ok) throw new Error("Failed to load events")
       return res.json() as Promise<ApiEvent[]>
+    },
+  })
+
+  // ── Daily chips query (for this week's daily notes areas) ─────────────────
+  const { data: dailyChips = [] } = useQuery<ApiChip[]>({
+    queryKey: ["chips", "daily", weekStart.toISOString()],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/chips?area=daily&weekStart=${weekStart.toISOString()}&weekEnd=${weekEnd.toISOString()}`
+      )
+      if (!res.ok) throw new Error("Failed to load chips")
+      return res.json() as Promise<ApiChip[]>
     },
   })
 
@@ -116,7 +138,19 @@ export default function WeekGrid() {
     })
   }
 
-  // ── Editor ──────────────────────────────────────────────────────────────────
+  function chipsForDay(date: Date): ApiChip[] {
+    return dailyChips.filter((chip) => {
+      if (!chip.dayTarget) return false
+      const t = new Date(chip.dayTarget)
+      return (
+        t.getFullYear() === date.getFullYear() &&
+        t.getMonth() === date.getMonth() &&
+        t.getDate() === date.getDate()
+      )
+    })
+  }
+
+  // ── Editor ───────────────────────────────────────────────────────────────────
   function openCreate(date: Date, hour: number) {
     setEditor({ open: true, date, hour, eventToEdit: null })
   }
@@ -125,12 +159,30 @@ export default function WeekGrid() {
     setEditor({ open: true, date: null, hour: null, eventToEdit: ev })
   }
 
+  function openScheduleChip(chip: ApiChip) {
+    setChipToConvert(chip)
+    setEditor({
+      open: true,
+      date: new Date(),
+      hour: 9,
+      eventToEdit: null,
+      prefillTitle: chip.title,
+      prefillDescription: chip.description ?? undefined,
+    })
+  }
+
   function closeEditor() {
     setEditor({ open: false, date: null, hour: null, eventToEdit: null })
+    setChipToConvert(null)
   }
 
   async function onEventSaved() {
     await queryClient.invalidateQueries({ queryKey: ["events"] })
+    // If the event was created from a chip, delete the chip
+    if (chipToConvert) {
+      await fetch(`/api/chips/${chipToConvert.id}`, { method: "DELETE" })
+      await queryClient.invalidateQueries({ queryKey: ["chips"] })
+    }
     closeEditor()
   }
 
@@ -144,7 +196,10 @@ export default function WeekGrid() {
   function handleDragStart({ active }: DragStartEvent) {
     const id = active.id as string
     setActiveId(id)
-    setActiveEvent(events.find((e) => e.id === id) ?? null)
+    const activeType = (active.data.current as { type: string } | undefined)?.type
+    if (activeType === "event") {
+      setActiveEvent(events.find((e) => e.id === id) ?? null)
+    }
     const rect = active.rect.current.initial
     if (rect) setActiveDims({ width: rect.width, height: rect.height })
   }
@@ -157,37 +212,61 @@ export default function WeekGrid() {
 
     if (!over || !draggedId) return
 
-    const event = events.find((e) => e.id === draggedId)
-    if (!event) return
+    const activeType = (active.data.current as { type: string } | undefined)?.type
+    const targetDateStr = over.id as string // "YYYY-MM-DD"
+    const [year, month, day] = targetDateStr.split("-").map(Number)
 
-    // over.id is "YYYY-MM-DD" of the target day column
-    const [year, month, day] = (over.id as string).split("-").map(Number)
+    if (activeType === "event") {
+      // ── Move existing event ──
+      const event = events.find((e) => e.id === draggedId)
+      if (!event) return
 
-    const originalStart = new Date(event.startTime)
-    const originalEnd = new Date(event.endTime)
-    const durationMs = originalEnd.getTime() - originalStart.getTime()
+      const originalStart = new Date(event.startTime)
+      const originalEnd = new Date(event.endTime)
+      const durationMs = originalEnd.getTime() - originalStart.getTime()
+      const deltaMinutes = snap15(delta.y / (PX_PER_HOUR / 60))
 
-    const deltaMinutes = snap15(delta.y / (PX_PER_HOUR / 60))
+      const newStart = new Date(originalStart)
+      newStart.setFullYear(year, month - 1, day)
+      newStart.setMinutes(newStart.getMinutes() + deltaMinutes)
 
-    const newStart = new Date(originalStart)
-    newStart.setFullYear(year, month - 1, day)
-    newStart.setMinutes(newStart.getMinutes() + deltaMinutes)
+      if (newStart.getHours() < HOUR_START) newStart.setHours(HOUR_START, 0, 0, 0)
+      if (newStart.getHours() >= HOUR_END) newStart.setHours(HOUR_END - 1, 45, 0, 0)
 
-    // Clamp within visible grid
-    if (newStart.getHours() < HOUR_START) newStart.setHours(HOUR_START, 0, 0, 0)
-    if (newStart.getHours() >= HOUR_END) newStart.setHours(HOUR_END - 1, 45, 0, 0)
+      const newEnd = new Date(newStart.getTime() + durationMs)
 
-    const newEnd = new Date(newStart.getTime() + durationMs)
+      await fetch(`/api/events/${draggedId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startTime: newStart.toISOString(),
+          endTime: newEnd.toISOString(),
+        }),
+      })
+      await queryClient.invalidateQueries({ queryKey: ["events"] })
 
-    await fetch(`/api/events/${draggedId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        startTime: newStart.toISOString(),
-        endTime: newEnd.toISOString(),
-      }),
-    })
-    await queryClient.invalidateQueries({ queryKey: ["events"] })
+    } else if (activeType === "chip") {
+      // ── Convert chip to event at drop position ──
+      const chipId = (active.data.current as { chipId: string }).chipId
+
+      // Calculate which hour the chip was dropped on using viewport rects
+      const dropTop = active.rect.current.translated?.top ?? 0
+      const columnTop = over.rect.top
+      const offsetFromColumnTop = Math.max(0, dropTop - columnTop)
+      const hourIndex = Math.floor(offsetFromColumnTop / PX_PER_HOUR)
+      const hour = Math.max(HOUR_START, Math.min(HOUR_END - 1, HOUR_START + hourIndex))
+
+      const startTime = new Date(year, month - 1, day, hour, 0, 0, 0).toISOString()
+      const endTime = new Date(year, month - 1, day, Math.min(hour + 1, HOUR_END - 1), 0, 0, 0).toISOString()
+
+      await fetch(`/api/chips/${chipId}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startTime, endTime }),
+      })
+      await queryClient.invalidateQueries({ queryKey: ["events"] })
+      await queryClient.invalidateQueries({ queryKey: ["chips"] })
+    }
   }
 
   function handleDragCancel() {
@@ -213,7 +292,6 @@ export default function WeekGrid() {
   async function handleResizeEnd(eventId: string) {
     const state = resizingRef.current
     if (!state || state.eventId !== eventId) return
-
     const event = events.find((e) => e.id === eventId)
     setResizing(null)
     if (!event) return
@@ -221,7 +299,6 @@ export default function WeekGrid() {
     const newEnd = new Date(state.originalEndTime)
     newEnd.setMinutes(newEnd.getMinutes() + state.deltaMinutes)
 
-    // Enforce minimum 15-minute duration
     const minEnd = new Date(new Date(event.startTime).getTime() + 15 * 60 * 1000)
     if (newEnd < minEnd) return
 
@@ -240,7 +317,7 @@ export default function WeekGrid() {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="flex flex-col h-full overflow-hidden bg-navy-950">
+      <div className="flex flex-col h-full overflow-hidden bg-navy-950 relative">
 
         {/* Week navigation bar */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-smoke-700 shrink-0 bg-navy-950">
@@ -267,10 +344,21 @@ export default function WeekGrid() {
           <span className="text-sm font-medium text-smoke-200 tracking-wide">
             {formatWeekRange()}
           </span>
-          <div className="w-28" />
+          <div className="flex items-center gap-2 w-28 justify-end">
+            <button
+              onClick={() => setPouchOpen((v) => !v)}
+              className={`px-3 py-1.5 text-xs border rounded transition-colors ${
+                pouchOpen
+                  ? "text-doom-gold border-doom-gold/50 bg-navy-800"
+                  : "text-smoke-300 border-smoke-600 hover:text-doom-gold hover:border-doom-gold/50"
+              }`}
+            >
+              Pouch
+            </button>
+          </div>
         </div>
 
-        {/* Day headers + Daily Notes */}
+        {/* Day headers + Daily Chip areas */}
         <div className="flex shrink-0 bg-navy-950 border-b border-smoke-700 z-10">
           <div className="w-16 shrink-0 border-r border-smoke-700" />
           {weekDays.map((date, i) => {
@@ -290,8 +378,16 @@ export default function WeekGrid() {
                     {date.getDate()}
                   </span>
                 </div>
-                <div className="h-20 bg-navy-900/30 px-2 py-1.5">
-                  <p className="text-xs text-smoke-500 italic select-none">Notes...</p>
+
+                {/* Daily chip area */}
+                <div className="min-h-20 bg-navy-900/30 px-2 py-1.5">
+                  <ChipArea
+                    area="daily"
+                    chips={chipsForDay(date)}
+                    draggable
+                    dayTarget={new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0).toISOString()}
+                    onSchedule={openScheduleChip}
+                  />
                 </div>
               </div>
             )
@@ -303,7 +399,6 @@ export default function WeekGrid() {
           ref={scrollRef}
           className="flex flex-1 overflow-y-auto [scrollbar-gutter:stable]"
         >
-          {/* Hour labels */}
           <div className="w-16 shrink-0 border-r border-smoke-700 bg-navy-950">
             {hours.map((hour) => (
               <div
@@ -317,7 +412,6 @@ export default function WeekGrid() {
             ))}
           </div>
 
-          {/* 7 day columns */}
           {weekDays.map((date, i) => (
             <DayColumn
               key={i}
@@ -336,7 +430,12 @@ export default function WeekGrid() {
           ))}
         </div>
 
-        {/* Floating drag preview */}
+        {/* Pouch panel */}
+        {pouchOpen && (
+          <Pouch onClose={() => setPouchOpen(false)} onSchedule={openScheduleChip} />
+        )}
+
+        {/* Drag overlay */}
         <DragOverlay dropAnimation={null}>
           {activeEvent && activeDims ? (
             <div
@@ -356,6 +455,8 @@ export default function WeekGrid() {
             date={editor.date}
             startHour={editor.hour}
             eventToEdit={editor.eventToEdit}
+            prefillTitle={editor.prefillTitle}
+            prefillDescription={editor.prefillDescription}
             onSave={onEventSaved}
             onDelete={onEventDeleted}
             onClose={closeEditor}

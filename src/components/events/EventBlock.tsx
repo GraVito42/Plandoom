@@ -27,6 +27,7 @@ export default function EventBlock({
 }: EventBlockProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: event.id,
+    data: { type: "event" },
   })
 
   const start = new Date(event.startTime)
