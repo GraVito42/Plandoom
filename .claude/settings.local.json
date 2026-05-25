@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma *)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(gh repo *)",
+      "Bash(git rev-list *)",
+      "Bash(git cat-file *)",
+      "Bash(awk '/^blob/ {print $3, $4}')"
+    ]
+  }
+}
