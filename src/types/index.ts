@@ -1,11 +1,20 @@
 export type VisualStyle = {
   shape: "rectangle" | "rounded" | "pill"
+  // Full border around the event block
   frameColor: string
   frameWidth: number
+  // Left accent line (side stripe)
+  sideColor: string
+  sideWidth: number
+  // Fill and text
   fillColor: string
-  eventType: string
+  textColor: string
   fontFamily: string
+  // Checkbox
   hasCheckbox: boolean
+  isChecked: boolean
+  // Other
+  eventType: string
 }
 
 export type EventSource = "plandoom" | "google" | "notion"
@@ -16,6 +25,7 @@ export type ApiEvent = {
   id: string
   title: string
   description: string | null
+  location: string | null
   startTime: string
   endTime: string
   isFlexible: boolean

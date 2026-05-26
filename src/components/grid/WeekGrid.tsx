@@ -20,6 +20,9 @@ import DayColumn from "./DayColumn"
 import EventEditor from "../events/EventEditor"
 import ChipArea from "../chips/ChipArea"
 import Pouch from "../chips/Pouch"
+import Seendo from "../magic/Seendo"
+import Plando from "../magic/Plando"
+import Glando from "../magic/Glando"
 
 interface EditorState {
   open: boolean
@@ -63,6 +66,9 @@ export default function WeekGrid() {
     eventToEdit: null,
   })
   const [pouchOpen, setPouchOpen] = useState(false)
+  const [seendoOpen, setSeendoOpen] = useState(false)
+  const [plandoOpen, setPlandoOpen] = useState(false)
+  const [glandoOpen, setGlandoOpen] = useState(false)
 
   // Drag overlay state
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -307,7 +313,28 @@ export default function WeekGrid() {
           <button onClick={nextWeek} className="px-3 py-1.5 text-sm text-smoke-300 hover:text-doom-gold hover:bg-navy-800 rounded transition-colors">→</button>
         </div>
         <span className="text-sm font-medium text-smoke-200 tracking-wide">{formatWeekRange()}</span>
-        <div className="flex items-center gap-2 w-28 justify-end">
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            onClick={() => setGlandoOpen(true)}
+            className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
+            title="Glando — Google Calendar sync"
+          >
+            Glando
+          </button>
+          <button
+            onClick={() => setPlandoOpen(true)}
+            className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
+            title="Plando — AI schedule optimizer"
+          >
+            Plando
+          </button>
+          <button
+            onClick={() => setSeendoOpen(true)}
+            className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
+            title="Seendo — scan agenda image"
+          >
+            Seendo
+          </button>
           <button
             onClick={() => setPouchOpen((v) => !v)}
             className={`px-3 py-1.5 text-xs border rounded transition-colors ${
@@ -397,6 +424,17 @@ export default function WeekGrid() {
       {pouchOpen && (
         <Pouch onClose={() => setPouchOpen(false)} onSchedule={openScheduleChip} />
       )}
+
+      {/* Seendo modal */}
+      {seendoOpen && <Seendo onClose={() => setSeendoOpen(false)} />}
+
+      {/* Plando modal */}
+      {plandoOpen && (
+        <Plando weekStart={weekStart} weekEnd={weekEnd} onClose={() => setPlandoOpen(false)} />
+      )}
+
+      {/* Glando modal */}
+      {glandoOpen && <Glando onClose={() => setGlandoOpen(false)} />}
 
       {/* Drag overlay */}
       <DragOverlay dropAnimation={null}>

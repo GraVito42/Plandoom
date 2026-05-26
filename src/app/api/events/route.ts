@@ -7,15 +7,20 @@ const visualStyleSchema = z.object({
   shape: z.enum(["rectangle", "rounded", "pill"]),
   frameColor: z.string(),
   frameWidth: z.number(),
+  sideColor: z.string(),
+  sideWidth: z.number(),
   fillColor: z.string(),
+  textColor: z.string(),
   eventType: z.string(),
   fontFamily: z.string(),
   hasCheckbox: z.boolean(),
+  isChecked: z.boolean(),
 })
 
 const createEventSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().optional(),
+  location: z.string().optional(),
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
   isFlexible: z.boolean().default(false),
@@ -23,7 +28,6 @@ const createEventSchema = z.object({
   visualStyle: visualStyleSchema.optional(),
 })
 
-// GET /api/events?from=ISO&to=ISO — eventi dell'utente in un intervallo
 export async function GET(request: Request) {
   try {
     const user = await ensureUser()
@@ -47,13 +51,12 @@ export async function GET(request: Request) {
     return NextResponse.json(events)
   } catch (err) {
     if (err instanceof Error && err.message === "Non autenticato") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-// POST /api/events — crea un nuovo evento
 export async function POST(request: Request) {
   try {
     const user = await ensureUser()
@@ -64,6 +67,7 @@ export async function POST(request: Request) {
       data: {
         title: data.title,
         description: data.description,
+        location: data.location,
         startTime: new Date(data.startTime),
         endTime: new Date(data.endTime),
         isFlexible: data.isFlexible,
@@ -77,11 +81,11 @@ export async function POST(request: Request) {
     return NextResponse.json(event, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: "Dati non validi", details: err.issues }, { status: 400 })
+      return NextResponse.json({ error: "Invalid data", details: err.issues }, { status: 400 })
     }
     if (err instanceof Error && err.message === "Non autenticato") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
