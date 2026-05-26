@@ -8,7 +8,9 @@
       "Bash(gh repo *)",
       "Bash(git rev-list *)",
       "Bash(git cat-file *)",
-      "Bash(awk '/^blob/ {print $3, $4}')"
+      "Bash(awk '/^blob/ {print $3, $4}')",
+      "Bash(git push *)",
+      "PowerShell(New-Item *)"
     ]
   }
 }
