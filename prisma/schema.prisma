@@ -11,14 +11,15 @@ model User {
   clerkId      String   @unique
   email        String   @unique
   name         String?
-  googleTokens Json?    // { access_token, refresh_token, expiry_date }
+  googleTokens Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  folders  Folder[]
-  events   Event[]
-  chips    Chip[]
-  palettes Palette[]
+  folders      Folder[]
+  events       Event[]
+  chips        Chip[]
+  palettes     Palette[]
+  folderFields FolderField[]
 }
 
 model Folder {
@@ -31,44 +32,113 @@ model Folder {
   icon        String?
   createdAt   DateTime @default(now())
 
-  events Event[]
-  chips  Chip[]
+  events       Event[]
+  chips        Chip[]
+  folderFields FolderField[]
+}
+
+// Campi custom definiti per una cartella
+model FolderField {
+  id        String   @id @default(cuid())
+  folderId  String
+  folder    Folder   @relation(fields: [folderId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  fieldType String   // "text" | "number" | "closed_list" | "boolean"
+  options   Json?    // per closed_list: array di stringhe
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
 }
 
 model Event {
   id          String   @id @default(cuid())
   title       String
   description String?
-  location    String?
   startTime   DateTime
   endTime     DateTime
-  isFlexible  Boolean  @default(false)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  folderId    String?
-  folder      Folder?  @relation(fields: [folderId], references: [id])
+
+  // Timing avanzato
+  isFullDay         Boolean @default(false)
+  isFlexible        Boolean @default(false)
+  timezone          String?
+  qualitativeTiming String?  // "morning"|"midday"|"afternoon"|"evening"|"night"
+
+  // Location
+  location    String?
+  locationUrl String?
+
+  // Ripetizione
+  repetition Json?  // { type, days?, endDate?, count? }
+
+  // Relazioni
+  userId   String
+  user     User    @relation(fields: [userId], references: [id])
+  folderId String?
+  folder   Folder? @relation(fields: [folderId], references: [id])
+
+  // Stile visivo
   visualStyle Json?
-  externalId  String?
-  source      String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  // Sync esterno (Lindo)
+  externalId       String?
+  source           String?  // "google" | "notion" | "plandoom"
+  isExternalLinked Boolean @default(false)
+
+  // Seendo
+  seendoImages Json?
+
+  // Prodo
+  mentalEnergy      Int?
+  physicalEnergy    Int?
+  difficulty        Int?
+  pleasure          Int?
+  isFixed           Boolean @default(false)
+  productivityModel String?
+
+  // Campi custom cartella
+  folderFieldValues Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Chip {
   id          String    @id @default(cuid())
   title       String
   description String?
-  area        String    @default("weekly")
-  dayTarget   DateTime?
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  folderId    String?
-  folder      Folder?   @relation(fields: [folderId], references: [id])
+
+  // Posizione
+  area       String    @default("weekly")  // "daily" | "weekly" | "pouch"
+  dayTarget  DateTime?
+  weekNumber Int?
+  year       Int?
+
+  // Dati chip
+  duration    Int?
+  location    String?
+  locationUrl String?
+
+  // Relazioni
+  userId   String
+  user     User    @relation(fields: [userId], references: [id])
+  folderId String?
+  folder   Folder? @relation(fields: [folderId], references: [id])
+
+  // Stile visivo
   visualStyle Json?
-  weekNumber  Int?
-  year        Int?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+
+  // Prodo
+  mentalEnergy     Int?
+  physicalEnergy   Int?
+  difficulty       Int?
+  optimalityTarget Int?
+
+  // Campi custom cartella
+  folderFieldValues Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Palette {

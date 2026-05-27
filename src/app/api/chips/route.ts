@@ -1,7 +1,22 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { ensureUser } from "@/lib/auth"
 import { db } from "@/lib/db"
+
+const visualStyleSchema = z.object({
+  shape: z.enum(["rectangle", "rounded", "pill"]),
+  frameColor: z.string(),
+  frameWidth: z.number(),
+  sideColor: z.string(),
+  sideWidth: z.number(),
+  fillColor: z.string(),
+  textColor: z.string(),
+  eventType: z.string(),
+  fontFamily: z.string(),
+  hasCheckbox: z.boolean(),
+  isChecked: z.boolean(),
+})
 
 const createChipSchema = z.object({
   title: z.string().min(1).max(255),
@@ -10,7 +25,16 @@ const createChipSchema = z.object({
   dayTarget: z.string().datetime().optional(),
   weekNumber: z.number().int().optional(),
   year: z.number().int().optional(),
+  duration: z.number().int().min(1).optional(),
+  location: z.string().optional(),
+  locationUrl: z.string().optional(),
   folderId: z.string().optional(),
+  visualStyle: visualStyleSchema.optional(),
+  mentalEnergy: z.number().int().min(0).max(100).optional(),
+  physicalEnergy: z.number().int().min(0).max(100).optional(),
+  difficulty: z.number().int().min(0).max(100).optional(),
+  optimalityTarget: z.number().int().min(0).max(100).optional(),
+  folderFieldValues: z.record(z.string(), z.unknown()).optional(),
 })
 
 // GET /api/chips
@@ -60,7 +84,16 @@ export async function POST(request: Request) {
         dayTarget: data.dayTarget ? new Date(data.dayTarget) : undefined,
         weekNumber: data.weekNumber,
         year: data.year,
+        duration: data.duration,
+        location: data.location,
+        locationUrl: data.locationUrl,
         folderId: data.folderId,
+        visualStyle: data.visualStyle as unknown as Prisma.InputJsonValue ?? undefined,
+        mentalEnergy: data.mentalEnergy,
+        physicalEnergy: data.physicalEnergy,
+        difficulty: data.difficulty,
+        optimalityTarget: data.optimalityTarget,
+        folderFieldValues: data.folderFieldValues as unknown as Prisma.InputJsonValue ?? undefined,
         userId: user.id,
       },
     })

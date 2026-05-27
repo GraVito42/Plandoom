@@ -17,8 +17,9 @@ import {
 } from "@/hooks/useGrid"
 import type { ApiEvent, ApiChip } from "@/types"
 import DayColumn from "./DayColumn"
-import EventEditor from "../events/EventEditor"
+import EventForm from "../events/EventForm/EventForm"
 import ChipArea from "../chips/ChipArea"
+import ChipForm from "../chips/ChipForm"
 import Pouch from "../chips/Pouch"
 import Seendo from "../magic/Seendo"
 import Plando from "../magic/Plando"
@@ -66,6 +67,7 @@ export default function WeekGrid() {
     eventToEdit: null,
   })
   const [pouchOpen, setPouchOpen] = useState(false)
+  const [chipFormOpen, setChipFormOpen] = useState(false)
   const [seendoOpen, setSeendoOpen] = useState(false)
   const [plandoOpen, setPlandoOpen] = useState(false)
   const [glandoOpen, setGlandoOpen] = useState(false)
@@ -317,16 +319,16 @@ export default function WeekGrid() {
           <button
             onClick={() => setGlandoOpen(true)}
             className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
-            title="Glando — Google Calendar sync"
+            title="Lindo — Google Calendar sync"
           >
-            Glando
+            Lindo
           </button>
           <button
             onClick={() => setPlandoOpen(true)}
             className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
-            title="Plando — AI schedule optimizer"
+            title="Prodo — AI schedule optimizer"
           >
-            Plando
+            Prodo
           </button>
           <button
             onClick={() => setSeendoOpen(true)}
@@ -334,6 +336,13 @@ export default function WeekGrid() {
             title="Seendo — scan agenda image"
           >
             Seendo
+          </button>
+          <button
+            onClick={() => setChipFormOpen(true)}
+            className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
+            title="New chip"
+          >
+            + Chip
           </button>
           <button
             onClick={() => setPouchOpen((v) => !v)}
@@ -425,15 +434,26 @@ export default function WeekGrid() {
         <Pouch onClose={() => setPouchOpen(false)} onSchedule={openScheduleChip} />
       )}
 
+      {/* Chip form modal */}
+      {chipFormOpen && (
+        <ChipForm
+          onSave={async () => {
+            await queryClient.invalidateQueries({ queryKey: ["chips"] })
+            setChipFormOpen(false)
+          }}
+          onClose={() => setChipFormOpen(false)}
+        />
+      )}
+
       {/* Seendo modal */}
       {seendoOpen && <Seendo onClose={() => setSeendoOpen(false)} />}
 
-      {/* Plando modal */}
+      {/* Prodo modal */}
       {plandoOpen && (
         <Plando weekStart={weekStart} weekEnd={weekEnd} onClose={() => setPlandoOpen(false)} />
       )}
 
-      {/* Glando modal */}
+      {/* Lindo modal */}
       {glandoOpen && <Glando onClose={() => setGlandoOpen(false)} />}
 
       {/* Drag overlay */}
@@ -455,9 +475,9 @@ export default function WeekGrid() {
         ) : null}
       </DragOverlay>
 
-      {/* Event editor modal */}
+      {/* Event form modal */}
       {editor.open && (
-        <EventEditor
+        <EventForm
           date={editor.date}
           startHour={editor.hour}
           eventToEdit={editor.eventToEdit}
