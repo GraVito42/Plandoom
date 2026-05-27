@@ -1,12 +1,32 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { ensureUser } from "@/lib/auth"
 import { db } from "@/lib/db"
+
+const visualStyleSchema = z.object({
+  shape: z.enum(["rectangle", "rounded", "pill"]),
+  frameColor: z.string(),
+  frameWidth: z.number(),
+  sideColor: z.string(),
+  sideWidth: z.number(),
+  fillColor: z.string(),
+  textColor: z.string(),
+  eventType: z.string(),
+  fontFamily: z.string(),
+  hasCheckbox: z.boolean(),
+  isChecked: z.boolean(),
+  shapePath: z.string().nullable().optional(),
+  shapeSmoothing: z.number().min(0).max(100).optional(),
+  textPosition: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
+  widthPercent: z.number().min(50).max(100).optional(),
+})
 
 const createFolderSchema = z.object({
   name: z.string().min(1).max(100),
   color: z.string().optional(),
   icon: z.string().optional(),
+  visualStyle: visualStyleSchema.nullable().optional(),
 })
 
 export async function GET() {
@@ -33,6 +53,9 @@ export async function POST(request: Request) {
         name: data.name,
         color: data.color,
         icon: data.icon,
+        visualStyle: data.visualStyle
+          ? (data.visualStyle as unknown as Prisma.InputJsonValue)
+          : undefined,
         userId: user.id,
       },
     })

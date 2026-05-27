@@ -57,11 +57,16 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   hasCheckbox: false,
   isChecked: false,
   eventType: "default",
+  shapePath: null,
+  shapeSmoothing: 0,
+  textPosition: null,
+  widthPercent: 100,
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     const r = raw as Record<string, unknown>
+    const tp = r.textPosition as { x: number; y: number } | null | undefined
     return {
       shape: (["rectangle", "rounded", "pill"].includes(r.shape as string)
         ? r.shape
@@ -76,6 +81,10 @@ function parseVisualStyle(raw: unknown): VisualStyle {
       hasCheckbox: typeof r.hasCheckbox === "boolean" ? r.hasCheckbox : false,
       isChecked: typeof r.isChecked === "boolean" ? r.isChecked : false,
       eventType: typeof r.eventType === "string" ? r.eventType : "default",
+      shapePath: typeof r.shapePath === "string" ? r.shapePath : null,
+      shapeSmoothing: typeof r.shapeSmoothing === "number" ? r.shapeSmoothing : 0,
+      textPosition: tp && typeof tp.x === "number" && typeof tp.y === "number" ? tp : null,
+      widthPercent: typeof r.widthPercent === "number" ? r.widthPercent : 100,
     }
   }
   return DEFAULT_VISUAL_STYLE

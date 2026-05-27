@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useDraggable } from "@dnd-kit/core"
 import { HOUR_START, PX_PER_HOUR } from "@/hooks/useGrid"
 import type { ApiEvent, VisualStyle } from "@/types"
+import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
 
 interface EventBlockProps {
   event: ApiEvent
@@ -31,9 +32,14 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     hasCheckbox: false,
     isChecked: false,
     eventType: "default",
+    shapePath: null,
+    shapeSmoothing: 0,
+    textPosition: null,
+    widthPercent: 100,
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaults
   const r = raw as Record<string, unknown>
+  const tp = r.textPosition as { x: number; y: number } | null | undefined
   return {
     shape: (["rectangle", "rounded", "pill"].includes(r.shape as string)
       ? r.shape
@@ -48,6 +54,10 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     hasCheckbox: typeof r.hasCheckbox === "boolean" ? r.hasCheckbox : defaults.hasCheckbox,
     isChecked: typeof r.isChecked === "boolean" ? r.isChecked : defaults.isChecked,
     eventType: typeof r.eventType === "string" ? r.eventType : defaults.eventType,
+    shapePath: typeof r.shapePath === "string" ? r.shapePath : null,
+    shapeSmoothing: typeof r.shapeSmoothing === "number" ? r.shapeSmoothing : 0,
+    textPosition: tp && typeof tp.x === "number" && typeof tp.y === "number" ? tp : null,
+    widthPercent: typeof r.widthPercent === "number" ? r.widthPercent : 100,
   }
 }
 
@@ -82,31 +92,29 @@ export default function EventBlock({
   const height = Math.max(24, baseHeight + resizeDeltaMinutes * (PX_PER_HOUR / 60))
 
   const vs = parseVisualStyle(event.visualStyle)
-  const radius = shapeRadius(vs.shape)
+  const hasCustomShape = !!vs.shapePath
+  const clipId = `clip-${event.id}`
+  const radius = hasCustomShape ? "0" : shapeRadius(vs.shape)
 
   const hasFrame = vs.frameWidth > 0 && vs.frameColor !== "transparent"
   const hasSide = vs.sideWidth > 0 && vs.sideColor !== "transparent"
   const fw = hasFrame ? vs.frameWidth : 0
   const fc = hasFrame ? vs.frameColor : "transparent"
 
-  // Frame covers all four sides uniformly — side accent is a separate inner div
-  const frameStyle: React.CSSProperties = {
+  // CSS frame — only used for standard (non-custom-shape) blocks
+  const frameStyle: React.CSSProperties = hasCustomShape ? {} : {
     borderTopWidth: fw, borderTopStyle: hasFrame ? "solid" : "none", borderTopColor: fc,
     borderRightWidth: fw, borderRightStyle: hasFrame ? "solid" : "none", borderRightColor: fc,
     borderBottomWidth: fw, borderBottomStyle: hasFrame ? "solid" : "none", borderBottomColor: fc,
     borderLeftWidth: fw, borderLeftStyle: hasFrame ? "solid" : "none", borderLeftColor: fc,
   }
 
-  // Content left padding accounts for the inner side stripe
-  const contentPaddingLeft = hasSide
-    ? vs.sideWidth + 4
-    : hasFrame
-    ? fw + 4
-    : 6
-
-  // Height thresholds for secondary info rows (title ~15px + py-1 ~4px overhead)
+  // Height thresholds for secondary info rows
   const showLocation = !!event.location && height >= 34
   const showTime = height >= (showLocation ? 50 : 34)
+
+  const widthPct = vs.widthPercent ?? 100
+  const textPos = hasCustomShape ? vs.textPosition : null
 
   async function handleCheckboxToggle(e: React.MouseEvent) {
     e.stopPropagation()
@@ -123,10 +131,27 @@ export default function EventBlock({
     <div
       ref={setNodeRef}
       {...attributes}
-      className="absolute left-0.5 right-0.5 z-20"
-      style={{ top, height, opacity: isDragging ? 0.25 : 1 }}
+      className="absolute z-20"
+      style={{
+        top,
+        height,
+        left: 2,
+        width: `calc(${widthPct}% - 4px)`,
+        opacity: isDragging ? 0.25 : 1,
+      }}
     >
-      {/* Event body: frame border + fill + draggable */}
+      {/* Clip-path definition for custom polygon shapes */}
+      {hasCustomShape && (
+        <svg width={0} height={0} style={{ display: "block" }}>
+          <defs>
+            <clipPath id={clipId} clipPathUnits="objectBoundingBox">
+              <path d={smoothedPath(pathToPoints(vs.shapePath), vs.shapeSmoothing)} />
+            </clipPath>
+          </defs>
+        </svg>
+      )}
+
+      {/* Event body: fill, content, draggable */}
       <div
         {...listeners}
         onClick={onClick}
@@ -137,76 +162,152 @@ export default function EventBlock({
         style={{
           backgroundColor: vs.fillColor,
           borderRadius: radius,
+          ...(hasCustomShape && { clipPath: `url(#${clipId})` }),
           ...frameStyle,
         }}
       >
-        {/* Side accent — absolute inner div, sits on top of fill, inside the frame */}
+        {/* Side accent */}
         {hasSide && (
           <div
             className="absolute left-0 top-0 bottom-0 pointer-events-none"
             style={{
               width: vs.sideWidth,
               backgroundColor: vs.sideColor,
-              borderRadius: vs.shape !== "rectangle"
-                ? `calc(${radius} - ${fw}px) 0 0 calc(${radius} - ${fw}px)`
-                : 0,
+              borderRadius: hasCustomShape || vs.shape === "rectangle"
+                ? 0
+                : `calc(${radius} - ${fw}px) 0 0 calc(${radius} - ${fw}px)`,
             }}
           />
         )}
 
-        {/* Content — padding scales with frame width and shape curvature */}
-        <div
-          className="h-full overflow-hidden"
-          style={{
-            paddingTop: Math.max(2, fw + 1),
-            paddingBottom: Math.max(2, fw + 1),
-            paddingRight: Math.max(4, fw + 2) + (vs.shape === "pill" ? 8 : 0),
-            paddingLeft: hasSide
-              ? vs.sideWidth + 4 + (vs.shape === "pill" ? 8 : 0)
-              : Math.max(4, fw + 2) + (vs.shape === "pill" ? 8 : 0),
-            color: vs.textColor,
-            fontFamily: vs.fontFamily !== "inherit" ? vs.fontFamily : undefined,
-          }}
-        >
-          {/* Title row */}
-          <div className="flex items-center gap-1 min-w-0">
-            {vs.hasCheckbox && (
-              <button
-                type="button"
-                onClick={handleCheckboxToggle}
-                className="shrink-0 text-[11px] leading-none hover:opacity-70 transition-opacity"
-                style={{ color: vs.textColor }}
-                title={vs.isChecked ? "Uncheck" : "Check"}
+        {/* Map pin — opens locationUrl in new tab, stops drag/click propagation */}
+        {event.locationUrl && (
+          <a
+            href={event.locationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute top-0.5 right-0.5 z-10 text-[9px] leading-none opacity-50 hover:opacity-100 transition-opacity"
+            style={{ color: vs.textColor }}
+            title="Open in Maps"
+          >
+            📍
+          </a>
+        )}
+
+        {/* Text at absolute position (custom shapes with textPosition) */}
+        {textPos ? (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: `${textPos.x * 100}%`,
+              top: `${textPos.y * 100}%`,
+              transform: "translate(-50%, -50%)",
+              maxWidth: "90%",
+              textAlign: "center",
+              color: vs.textColor,
+              fontFamily: vs.fontFamily !== "inherit" ? vs.fontFamily : undefined,
+            }}
+          >
+            <div className="flex items-center gap-1 justify-center min-w-0">
+              {vs.hasCheckbox && (
+                <button
+                  type="button"
+                  onClick={handleCheckboxToggle}
+                  className="shrink-0 text-[11px] leading-none hover:opacity-70 transition-opacity pointer-events-auto"
+                  style={{ color: vs.textColor }}
+                  title={vs.isChecked ? "Uncheck" : "Check"}
+                >
+                  {vs.isChecked ? "☑" : "☐"}
+                </button>
+              )}
+              <p
+                className="text-xs font-medium truncate leading-tight min-w-0"
+                style={{
+                  textDecoration: vs.hasCheckbox && vs.isChecked ? "line-through" : "none",
+                  opacity: vs.hasCheckbox && vs.isChecked ? 0.6 : 1,
+                }}
               >
-                {vs.isChecked ? "☑" : "☐"}
-              </button>
+                {event.title}
+              </p>
+            </div>
+            {showLocation && (
+              <p className="text-[10px] truncate leading-tight opacity-75 mt-0.5">📍 {event.location}</p>
             )}
-            <p
-              className="text-xs font-medium truncate leading-tight min-w-0"
-              style={{
-                textDecoration: vs.hasCheckbox && vs.isChecked ? "line-through" : "none",
-                opacity: vs.hasCheckbox && vs.isChecked ? 0.6 : 1,
-              }}
-            >
-              {event.title}
-            </p>
+            {showTime && (
+              <p className="text-[10px] truncate leading-tight opacity-60 mt-0.5">
+                {formatTime(start)} – {formatTime(end)}
+              </p>
+            )}
           </div>
-
-          {/* Location */}
-          {showLocation && (
-            <p className="text-[10px] truncate leading-tight opacity-75 mt-0.5">
-              📍 {event.location}
-            </p>
-          )}
-
-          {/* Time range */}
-          {showTime && (
-            <p className="text-[10px] truncate leading-tight opacity-60 mt-0.5">
-              {formatTime(start)} – {formatTime(end)}
-            </p>
-          )}
-        </div>
+        ) : (
+          /* Standard padding layout */
+          <div
+            className="h-full overflow-hidden"
+            style={{
+              paddingTop: Math.max(2, fw + 1),
+              paddingBottom: Math.max(2, fw + 1),
+              paddingRight: Math.max(4, fw + 2) + (vs.shape === "pill" ? 8 : 0),
+              paddingLeft: hasSide
+                ? vs.sideWidth + 4 + (vs.shape === "pill" ? 8 : 0)
+                : Math.max(4, fw + 2) + (vs.shape === "pill" ? 8 : 0),
+              color: vs.textColor,
+              fontFamily: vs.fontFamily !== "inherit" ? vs.fontFamily : undefined,
+            }}
+          >
+            <div className="flex items-center gap-1 min-w-0">
+              {vs.hasCheckbox && (
+                <button
+                  type="button"
+                  onClick={handleCheckboxToggle}
+                  className="shrink-0 text-[11px] leading-none hover:opacity-70 transition-opacity"
+                  style={{ color: vs.textColor }}
+                  title={vs.isChecked ? "Uncheck" : "Check"}
+                >
+                  {vs.isChecked ? "☑" : "☐"}
+                </button>
+              )}
+              <p
+                className="text-xs font-medium truncate leading-tight min-w-0"
+                style={{
+                  textDecoration: vs.hasCheckbox && vs.isChecked ? "line-through" : "none",
+                  opacity: vs.hasCheckbox && vs.isChecked ? 0.6 : 1,
+                }}
+              >
+                {event.title}
+              </p>
+            </div>
+            {showLocation && (
+              <p className="text-[10px] truncate leading-tight opacity-75 mt-0.5">📍 {event.location}</p>
+            )}
+            {showTime && (
+              <p className="text-[10px] truncate leading-tight opacity-60 mt-0.5">
+                {formatTime(start)} – {formatTime(end)}
+              </p>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* SVG frame stroke for custom shapes — sibling of body, outside clip, renders on top */}
+      {hasCustomShape && hasFrame && (
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="0 0 1 1"
+          preserveAspectRatio="none"
+          style={{ overflow: "visible" }}
+        >
+          <path
+            d={smoothedPath(pathToPoints(vs.shapePath), vs.shapeSmoothing)}
+            fill="none"
+            stroke={fc}
+            strokeWidth={fw}
+            vectorEffect="non-scaling-stroke"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
 
       {/* Resize handle */}
       <div

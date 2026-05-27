@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { ApiFolder, RepetitionConfig } from "@/types"
 
@@ -22,6 +22,12 @@ const WEEK_DAYS = [
   { value: "sun", label: "S" },
 ]
 
+type PlaceResult = {
+  name: string
+  fullAddress: string
+  mapsUrl: string
+}
+
 export type ContentDraft = {
   title: string
   description: string
@@ -41,13 +47,176 @@ export type ContentDraft = {
 interface ContentTabProps {
   draft: ContentDraft
   onChange: (patch: Partial<ContentDraft>) => void
+  onFolderChange?: (folderId: string, folderVisualStyle: unknown) => void
 }
 
 function input(extra?: string) {
   return `bg-smoke-800 border border-smoke-700 text-smoke-100 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-smoke-500 ${extra ?? ""}`
 }
 
-export default function ContentTab({ draft, onChange }: ContentTabProps) {
+// ── MapPinIcon ────────────────────────────────────────────────────────────────
+function MapPinIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+    </svg>
+  )
+}
+
+// ── LocationField ─────────────────────────────────────────────────────────────
+function LocationField({
+  location,
+  locationUrl,
+  onChange,
+}: {
+  location: string
+  locationUrl: string
+  onChange: (patch: { location?: string; locationUrl?: string }) => void
+}) {
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [results, setResults] = useState<PlaceResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!query.trim() || query.length < 2) {
+      setResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/maps/places?q=${encodeURIComponent(query)}`)
+        if (res.ok) setResults((await res.json()) as PlaceResult[])
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  function openSearch() {
+    setSearchOpen(true)
+    setTimeout(() => searchInputRef.current?.focus(), 30)
+  }
+
+  function closeSearch() {
+    setSearchOpen(false)
+    setQuery("")
+    setResults([])
+  }
+
+  function selectPlace(place: PlaceResult) {
+    onChange({ location: place.name, locationUrl: place.mapsUrl })
+    closeSearch()
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {/* Location input row */}
+      <div className="flex gap-1">
+        <input
+          type="text"
+          value={location}
+          onChange={(e) => onChange({ location: e.target.value })}
+          placeholder="Place or address"
+          className={input("flex-1")}
+        />
+        <button
+          type="button"
+          onClick={searchOpen ? closeSearch : openSearch}
+          title="Search on Maps"
+          className={`flex items-center justify-center w-8 rounded border transition-colors shrink-0 ${
+            searchOpen
+              ? "bg-doom-gold/15 border-doom-gold/50 text-doom-gold"
+              : "border-smoke-700 text-smoke-400 hover:text-smoke-200 hover:border-smoke-500 bg-smoke-800"
+          }`}
+        >
+          <MapPinIcon />
+        </button>
+      </div>
+
+      {/* Inline search box */}
+      {searchOpen && (
+        <div className="flex flex-col gap-1">
+          <div className="flex gap-1">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") closeSearch() }}
+              placeholder="Search places…"
+              className={input("flex-1 text-xs")}
+            />
+            <button
+              type="button"
+              onClick={closeSearch}
+              className="text-smoke-400 hover:text-smoke-200 px-2 text-sm transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          {loading && (
+            <p className="text-[10px] text-smoke-500 px-1">Searching…</p>
+          )}
+
+          {results.length > 0 && (
+            <div className="flex flex-col bg-smoke-800 border border-smoke-700 rounded-lg overflow-hidden shadow-lg">
+              {results.map((place, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => selectPlace(place)}
+                  className="flex flex-col items-start px-3 py-2 text-left hover:bg-smoke-700 transition-colors border-b border-smoke-700/50 last:border-0"
+                >
+                  <span className="text-xs text-smoke-100 font-medium leading-snug">{place.name}</span>
+                  <span className="text-[10px] text-smoke-400 truncate w-full">{place.fullAddress}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!loading && query.length >= 2 && results.length === 0 && (
+            <p className="text-[10px] text-smoke-600 px-1">No results found</p>
+          )}
+        </div>
+      )}
+
+      {/* Maps link or manual URL input */}
+      {!searchOpen && locationUrl && (
+        <a
+          href={locationUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-doom-gold/70 hover:text-doom-gold transition-colors self-start"
+        >
+          Open in Maps →
+        </a>
+      )}
+      {!searchOpen && location && !locationUrl && (
+        <input
+          type="url"
+          value={locationUrl}
+          onChange={(e) => onChange({ locationUrl: e.target.value })}
+          placeholder="Google Maps link (optional)"
+          className={input("w-full text-xs")}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── ContentTab ────────────────────────────────────────────────────────────────
+export default function ContentTab({ draft, onChange, onFolderChange }: ContentTabProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [repetitionOpen, setRepetitionOpen] = useState(false)
 
@@ -100,7 +269,6 @@ export default function ContentTab({ draft, onChange }: ContentTabProps) {
           </div>
         </div>
 
-        {/* Advanced settings toggle */}
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
@@ -157,26 +325,15 @@ export default function ContentTab({ draft, onChange }: ContentTabProps) {
       </div>
 
       {/* Location */}
-      <div className="flex flex-col gap-2">
-        <label className="block text-[10px] text-smoke-500 uppercase tracking-wider">
+      <div>
+        <label className="block text-[10px] text-smoke-500 uppercase tracking-wider mb-1.5">
           📍 Location
         </label>
-        <input
-          type="text"
-          value={draft.location}
-          onChange={(e) => onChange({ location: e.target.value })}
-          placeholder="Place or address"
-          className={input("w-full")}
+        <LocationField
+          location={draft.location}
+          locationUrl={draft.locationUrl}
+          onChange={onChange}
         />
-        {draft.location && (
-          <input
-            type="url"
-            value={draft.locationUrl}
-            onChange={(e) => onChange({ locationUrl: e.target.value })}
-            placeholder="Google Maps link (optional)"
-            className={input("w-full text-xs")}
-          />
-        )}
       </div>
 
       {/* Notes */}
@@ -196,7 +353,12 @@ export default function ContentTab({ draft, onChange }: ContentTabProps) {
         <label className="block text-[10px] text-smoke-500 uppercase tracking-wider mb-1">📁 Folder</label>
         <select
           value={draft.folderId}
-          onChange={(e) => onChange({ folderId: e.target.value })}
+          onChange={(e) => {
+            const newId = e.target.value
+            onChange({ folderId: newId })
+            const folder = folders.find((f) => f.id === newId)
+            onFolderChange?.(newId, folder?.visualStyle ?? null)
+          }}
           className={input("w-full")}
         >
           <option value="">No folder</option>
@@ -223,7 +385,6 @@ export default function ContentTab({ draft, onChange }: ContentTabProps) {
 
         {repetitionOpen && rep && (
           <div className="flex flex-col gap-3 mt-3 pl-3 border-l border-smoke-700">
-            {/* Type */}
             <div className="flex gap-1">
               {(["daily", "weekly", "monthly", "yearly"] as const).map((t) => (
                 <button
@@ -241,7 +402,6 @@ export default function ContentTab({ draft, onChange }: ContentTabProps) {
               ))}
             </div>
 
-            {/* Day selector for weekly */}
             {rep.type === "weekly" && (
               <div className="flex gap-1">
                 {WEEK_DAYS.map((d) => (
@@ -261,7 +421,6 @@ export default function ContentTab({ draft, onChange }: ContentTabProps) {
               </div>
             )}
 
-            {/* End condition */}
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="block text-[10px] text-smoke-500 mb-1">End date</label>

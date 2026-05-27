@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react"
 
 export const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-export const HOUR_START = 7
-export const HOUR_END = 23
+export const HOUR_START = 0
+export const HOUR_END = 24
 export const PX_PER_HOUR = 64 // px height per hour row (h-16)
 
 export function getMonday(date: Date): Date {

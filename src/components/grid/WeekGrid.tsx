@@ -19,7 +19,6 @@ import type { ApiEvent, ApiChip } from "@/types"
 import DayColumn from "./DayColumn"
 import EventForm from "../events/EventForm/EventForm"
 import ChipArea from "../chips/ChipArea"
-import ChipForm from "../chips/ChipForm"
 import Pouch from "../chips/Pouch"
 import Seendo from "../magic/Seendo"
 import Plando from "../magic/Plando"
@@ -67,7 +66,6 @@ export default function WeekGrid() {
     eventToEdit: null,
   })
   const [pouchOpen, setPouchOpen] = useState(false)
-  const [chipFormOpen, setChipFormOpen] = useState(false)
   const [seendoOpen, setSeendoOpen] = useState(false)
   const [plandoOpen, setPlandoOpen] = useState(false)
   const [glandoOpen, setGlandoOpen] = useState(false)
@@ -114,13 +112,9 @@ export default function WeekGrid() {
   // ── Auto-scroll to current time on mount ────────────────────────────────────
   useEffect(() => {
     if (!scrollRef.current) return
-    const hour = new Date().getHours()
-    const minutes = new Date().getMinutes()
-    if (hour >= HOUR_START && hour < HOUR_END) {
-      const offset = (hour - HOUR_START) * PX_PER_HOUR + minutes * (PX_PER_HOUR / 60)
-      // offset - 60 so the current hour appears near the top of the viewport
-      scrollRef.current.scrollTop = Math.max(0, offset - 60)
-    }
+    const now = new Date()
+    const offset = now.getHours() * PX_PER_HOUR + now.getMinutes() * (PX_PER_HOUR / 60)
+    scrollRef.current.scrollTop = Math.max(0, offset - PX_PER_HOUR)
   }, [])
 
   // ── Data helpers ─────────────────────────────────────────────────────────────
@@ -227,8 +221,11 @@ export default function WeekGrid() {
         const newStart = new Date(originalStart)
         newStart.setFullYear(year, month - 1, day)
         newStart.setMinutes(newStart.getMinutes() + deltaMinutes)
-        if (newStart.getHours() < HOUR_START) newStart.setHours(HOUR_START, 0, 0, 0)
-        if (newStart.getHours() >= HOUR_END) newStart.setHours(HOUR_END - 1, 45, 0, 0)
+        // Clamp to the target day: 00:00 – 23:45
+        const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0)
+        const dayLast = new Date(year, month - 1, day, 23, 45, 0, 0)
+        if (newStart < dayStart) newStart.setTime(dayStart.getTime())
+        if (newStart > dayLast) newStart.setTime(dayLast.getTime())
         const newEnd = new Date(newStart.getTime() + durationMs)
 
         await fetch(`/api/events/${draggedId}`, {
@@ -338,13 +335,6 @@ export default function WeekGrid() {
             Seendo
           </button>
           <button
-            onClick={() => setChipFormOpen(true)}
-            className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
-            title="New chip"
-          >
-            + Chip
-          </button>
-          <button
             onClick={() => setPouchOpen((v) => !v)}
             className={`px-3 py-1.5 text-xs border rounded transition-colors ${
               pouchOpen
@@ -364,10 +354,10 @@ export default function WeekGrid() {
         <div style={{ display: "grid", gridTemplateColumns: "4rem 1fr" }}>
 
           {/* [0,0] Top-left corner — sticky, above day headers */}
-          <div className="sticky top-0 z-30 bg-navy-950 border-r border-b border-smoke-700" />
+          <div className="sticky top-0 z-40 bg-navy-950 border-r border-b border-smoke-700" />
 
-          {/* [0,1] Day headers — sticky top */}
-          <div className="sticky top-0 z-20 flex bg-navy-950 border-b border-smoke-700">
+          {/* [0,1] Day headers — sticky top, above events (z-20) */}
+          <div className="sticky top-0 z-30 flex bg-navy-950 border-b border-smoke-700">
             {weekDays.map((date, i) => {
               const today = isToday(date)
               return (
@@ -432,17 +422,6 @@ export default function WeekGrid() {
       {/* Pouch panel */}
       {pouchOpen && (
         <Pouch onClose={() => setPouchOpen(false)} onSchedule={openScheduleChip} />
-      )}
-
-      {/* Chip form modal */}
-      {chipFormOpen && (
-        <ChipForm
-          onSave={async () => {
-            await queryClient.invalidateQueries({ queryKey: ["chips"] })
-            setChipFormOpen(false)
-          }}
-          onClose={() => setChipFormOpen(false)}
-        />
       )}
 
       {/* Seendo modal */}

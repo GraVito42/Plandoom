@@ -69,7 +69,12 @@ model Event {
   locationUrl String?
 
   // Ripetizione
-  repetition Json?  // { type, days?, endDate?, count? }
+  repetition    Json?    // { type, days?, endDate?, count? } — solo sul parent
+  parentEventId String?  // se impostato, questo è un'occorrenza di una serie
+
+  // Self-relation: occorrenze della serie
+  parent      Event?  @relation("EventOccurrences", fields: [parentEventId], references: [id], onDelete: SetNull)
+  occurrences Event[] @relation("EventOccurrences")
 
   // Relazioni
   userId   String

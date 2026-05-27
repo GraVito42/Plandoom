@@ -16,6 +16,10 @@ const visualStyleSchema = z.object({
   fontFamily: z.string(),
   hasCheckbox: z.boolean(),
   isChecked: z.boolean(),
+  shapePath: z.string().nullable().optional(),
+  shapeSmoothing: z.number().min(0).max(100).optional(),
+  textPosition: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
+  widthPercent: z.number().min(50).max(100).optional(),
 })
 
 const repetitionSchema = z.object({
@@ -47,6 +51,7 @@ const updateEventSchema = z.object({
   productivityModel: z.string().nullable().optional(),
   folderFieldValues: z.record(z.string(), z.unknown()).nullable().optional(),
   isExternalLinked: z.boolean().optional(),
+  scope: z.enum(["this", "all"]).optional(),
 })
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -81,38 +86,65 @@ export async function PUT(request: Request, { params }: RouteParams) {
     const body: unknown = await request.json()
     const data = updateEventSchema.parse(body)
 
+    // Non-timing fields shared across all occurrences
+    const sharedPatch = {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.isFlexible !== undefined && { isFlexible: data.isFlexible }),
+      ...(data.isFullDay !== undefined && { isFullDay: data.isFullDay }),
+      ...(data.timezone !== undefined && { timezone: data.timezone }),
+      ...(data.qualitativeTiming !== undefined && { qualitativeTiming: data.qualitativeTiming }),
+      ...(data.location !== undefined && { location: data.location }),
+      ...(data.locationUrl !== undefined && { locationUrl: data.locationUrl }),
+      ...(data.folderId !== undefined && { folderId: data.folderId }),
+      ...(data.visualStyle !== undefined && {
+        visualStyle: data.visualStyle ? (data.visualStyle as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+      }),
+      ...(data.mentalEnergy !== undefined && { mentalEnergy: data.mentalEnergy }),
+      ...(data.physicalEnergy !== undefined && { physicalEnergy: data.physicalEnergy }),
+      ...(data.difficulty !== undefined && { difficulty: data.difficulty }),
+      ...(data.pleasure !== undefined && { pleasure: data.pleasure }),
+      ...(data.isFixed !== undefined && { isFixed: data.isFixed }),
+      ...(data.productivityModel !== undefined && { productivityModel: data.productivityModel }),
+      ...(data.folderFieldValues !== undefined && {
+        folderFieldValues: data.folderFieldValues
+          ? (data.folderFieldValues as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+      }),
+      ...(data.isExternalLinked !== undefined && { isExternalLinked: data.isExternalLinked }),
+    }
+
+    if (data.scope === "all") {
+      // Apply non-timing changes to every event in the series
+      const rootId = existing.parentEventId ?? existing.id
+      await db.event.updateMany({
+        where: { OR: [{ id: rootId }, { parentEventId: rootId }] },
+        data: sharedPatch,
+      })
+
+      // Apply timing changes (if any) only to this specific event
+      const timingPatch = {
+        ...(data.startTime !== undefined && { startTime: new Date(data.startTime) }),
+        ...(data.endTime !== undefined && { endTime: new Date(data.endTime) }),
+      }
+      const updated = await db.event.update({
+        where: { id },
+        data: timingPatch,
+      })
+
+      return NextResponse.json(updated)
+    }
+
+    // scope="this" (default) — update only this event
     const updated = await db.event.update({
       where: { id },
       data: {
-        ...(data.title !== undefined && { title: data.title }),
-        ...(data.description !== undefined && { description: data.description }),
+        ...sharedPatch,
         ...(data.startTime !== undefined && { startTime: new Date(data.startTime) }),
         ...(data.endTime !== undefined && { endTime: new Date(data.endTime) }),
-        ...(data.isFlexible !== undefined && { isFlexible: data.isFlexible }),
-        ...(data.isFullDay !== undefined && { isFullDay: data.isFullDay }),
-        ...(data.timezone !== undefined && { timezone: data.timezone }),
-        ...(data.qualitativeTiming !== undefined && { qualitativeTiming: data.qualitativeTiming }),
-        ...(data.location !== undefined && { location: data.location }),
-        ...(data.locationUrl !== undefined && { locationUrl: data.locationUrl }),
         ...(data.repetition !== undefined && {
           repetition: data.repetition ? (data.repetition as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
         }),
-        ...(data.folderId !== undefined && { folderId: data.folderId }),
-        ...(data.visualStyle !== undefined && {
-          visualStyle: data.visualStyle ? (data.visualStyle as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
-        }),
-        ...(data.mentalEnergy !== undefined && { mentalEnergy: data.mentalEnergy }),
-        ...(data.physicalEnergy !== undefined && { physicalEnergy: data.physicalEnergy }),
-        ...(data.difficulty !== undefined && { difficulty: data.difficulty }),
-        ...(data.pleasure !== undefined && { pleasure: data.pleasure }),
-        ...(data.isFixed !== undefined && { isFixed: data.isFixed }),
-        ...(data.productivityModel !== undefined && { productivityModel: data.productivityModel }),
-        ...(data.folderFieldValues !== undefined && {
-          folderFieldValues: data.folderFieldValues
-            ? (data.folderFieldValues as unknown as Prisma.InputJsonValue)
-            : Prisma.JsonNull,
-        }),
-        ...(data.isExternalLinked !== undefined && { isExternalLinked: data.isExternalLinked }),
       },
     })
 
@@ -124,20 +156,33 @@ export async function PUT(request: Request, { params }: RouteParams) {
     if (err instanceof Error && err.message === "Non autenticato") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[PUT /api/events/:id]", err)
+    return NextResponse.json({ error: "Internal server error", detail: String(err) }, { status: 500 })
   }
 }
 
-export async function DELETE(_request: Request, { params }: RouteParams) {
+export async function DELETE(request: Request, { params }: RouteParams) {
   try {
     const user = await ensureUser()
     const { id } = await params
+    const { searchParams } = new URL(request.url)
+    const scope = searchParams.get("scope") ?? "this"
 
     const existing = await db.event.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
     if (existing.userId !== user.id) return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
 
-    await db.event.delete({ where: { id } })
+    if (scope === "all") {
+      const rootId = existing.parentEventId ?? existing.id
+      // Delete children first (FK constraint), then root
+      await db.$transaction([
+        db.event.deleteMany({ where: { parentEventId: rootId } }),
+        db.event.delete({ where: { id: rootId } }),
+      ])
+    } else {
+      await db.event.delete({ where: { id } })
+    }
+
     return new NextResponse(null, { status: 204 })
   } catch (err) {
     if (err instanceof Error && err.message === "Non autenticato") {

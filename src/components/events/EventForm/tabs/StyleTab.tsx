@@ -1,10 +1,13 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import type React from "react"
 import type { VisualStyle } from "@/types"
+import PolygonEditor from "./PolygonEditor"
+import { PX_PER_HOUR } from "@/hooks/useGrid"
+import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
 
-const PRESETS = [
+const COLOR_PRESETS = [
   "#162d5e", "#0f2044", "#1e3a78", "#2a4d96",
   "#c9a84c", "#8b3a2a", "#4a2d6b", "#1a1c1e",
   "#d1d5db", "#6b7280", "transparent",
@@ -20,10 +23,28 @@ const FONTS = [
   { label: "Comic", value: "'Comic Sans MS', cursive" },
 ]
 
-function ColorInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+// ── ColorInput ────────────────────────────────────────────────────────────────
+
+function swatchBg(color: string): string {
+  return color === "transparent"
+    ? "repeating-conic-gradient(#555 0% 25%, #222 0% 50%) 0 0 / 8px 8px"
+    : color
+}
+
+function ColorInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: string
+  onChange: (v: string) => void
+  label: string
+}) {
   const [open, setOpen] = useState(false)
   const [hex, setHex] = useState(value)
   const pickerRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setHex(value) }, [value])
 
   function applyHex(v: string) {
     const clean = v.startsWith("#") ? v : `#${v}`
@@ -37,46 +58,71 @@ function ColorInput({ value, onChange, label }: { value: string; onChange: (v: s
     setOpen(false)
   }
 
+  const hexPreview = hex !== "transparent" && /^#[0-9a-fA-F]{3,6}$/.test(hex) ? hex : "#888888"
+
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[10px] text-smoke-500 uppercase tracking-wider">{label}</span>
       <div className="relative">
+
+        {/* Trigger — shows current color */}
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="w-full h-7 rounded border border-smoke-700 hover:border-smoke-500 transition-colors"
-          style={{ backgroundColor: value === "transparent" ? undefined : value }}
+          onClick={() => setOpen((p) => !p)}
+          className="w-full h-7 rounded border border-smoke-700 hover:border-smoke-500 transition-colors overflow-hidden"
           title={value}
         >
-          {value === "transparent" && (
-            <span className="text-[10px] text-smoke-400">transparent</span>
-          )}
+          <span
+            className="block w-full h-full"
+            style={{ background: swatchBg(value) }}
+          >
+            {value === "transparent" && (
+              <span className="flex items-center justify-center h-full text-[10px] text-smoke-400">
+                transparent
+              </span>
+            )}
+          </span>
         </button>
 
         {open && (
-          <div className="absolute left-0 top-9 z-50 bg-smoke-800 border border-smoke-700 rounded-lg shadow-2xl p-3 w-52">
+          <div className="absolute left-0 top-9 z-50 bg-smoke-900 border border-smoke-700 rounded-lg shadow-2xl p-3 w-52">
+
+            {/* Preset swatches */}
             <div className="grid grid-cols-6 gap-1.5 mb-3">
-              {PRESETS.map((c) => (
+              {COLOR_PRESETS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => applyColor(c)}
-                  className="w-6 h-6 rounded border border-smoke-600 hover:scale-110 transition-transform"
-                  style={{ backgroundColor: c === "transparent" ? undefined : c, background: c === "transparent" ? "repeating-conic-gradient(#444 0% 25%, transparent 0% 50%) 0 0 / 8px 8px" : undefined }}
                   title={c}
-                />
+                  className="w-6 h-6 rounded hover:scale-110 transition-transform overflow-hidden shrink-0"
+                  style={{
+                    outline: value === c ? "2px solid #c9a84c" : "1px solid #3a3f45",
+                    outlineOffset: value === c ? "2px" : "0px",
+                  }}
+                >
+                  <span
+                    className="block w-full h-full"
+                    style={{ background: swatchBg(c) }}
+                  />
+                </button>
               ))}
             </div>
+
+            {/* Custom color row: picker + hex input */}
             <div className="flex gap-1.5 items-center">
               <div
                 className="relative w-7 h-7 rounded border border-smoke-600 cursor-pointer shrink-0 overflow-hidden"
                 onClick={() => pickerRef.current?.click()}
               >
-                <div className="absolute inset-0 rounded" style={{ backgroundColor: hex !== "transparent" ? hex : "#888" }} />
+                <span
+                  className="absolute inset-0 rounded"
+                  style={{ background: hexPreview }}
+                />
                 <input
                   ref={pickerRef}
                   type="color"
-                  value={hex !== "transparent" ? hex : "#888888"}
+                  value={hexPreview}
                   onChange={(e) => applyHex(e.target.value)}
                   className="absolute opacity-0 w-full h-full cursor-pointer"
                 />
@@ -86,10 +132,11 @@ function ColorInput({ value, onChange, label }: { value: string; onChange: (v: s
                 value={hex}
                 onChange={(e) => applyHex(e.target.value)}
                 maxLength={9}
-                className="flex-1 bg-smoke-900 border border-smoke-700 text-smoke-200 text-xs px-2 py-1 rounded font-mono"
+                className="flex-1 bg-smoke-800 border border-smoke-700 text-smoke-200 text-xs px-2 py-1 rounded font-mono focus:outline-none focus:border-smoke-500"
                 placeholder="#000000"
               />
             </div>
+
           </div>
         )}
       </div>
@@ -97,149 +144,243 @@ function ColorInput({ value, onChange, label }: { value: string; onChange: (v: s
   )
 }
 
-function WidthInput({ value, onChange, label, max = 4 }: { value: number; onChange: (v: number) => void; label: string; max?: number }) {
+function WidthSlider({
+  value,
+  onChange,
+  label,
+  max,
+}: {
+  value: number
+  onChange: (v: number) => void
+  label: string
+  max: number
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+
+  function getValueFromX(clientX: number): number {
+    const rect = trackRef.current!.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    return Math.round(ratio * max)
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    onChange(getValueFromX(e.clientX))
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+    onChange(getValueFromX(e.clientX))
+  }
+
+  const pct = max > 0 ? value / max : 0
+
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] text-smoke-500 uppercase tracking-wider">{label}</span>
-      <div className="flex gap-1">
-        {Array.from({ length: max + 1 }, (_, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onChange(i)}
-            className={`flex-1 py-1 text-xs rounded border transition-colors ${
-              value === i
-                ? "bg-doom-gold text-navy-950 border-doom-gold"
-                : "bg-smoke-800 border-smoke-700 text-smoke-400 hover:text-smoke-200"
-            }`}
-          >
-            {i === 0 ? "off" : `${i}`}
-          </button>
-        ))}
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] text-smoke-500 uppercase tracking-wider">{label}</span>
+        <span className="text-[10px] text-smoke-400 font-mono tabular-nums">
+          {value === 0 ? "off" : `${value}px`}
+        </span>
+      </div>
+      <div
+        ref={trackRef}
+        className="relative cursor-pointer select-none"
+        style={{ height: 22 }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+      >
+        {/* Track background */}
+        <div className="absolute w-full rounded-full bg-smoke-700" style={{ height: 2, top: 16 }} />
+        {/* Track fill */}
+        <div
+          className="absolute rounded-full bg-doom-gold/50"
+          style={{ height: 2, top: 16, width: `${pct * 100}%` }}
+        />
+        {/* Triangle handle ▼ */}
+        <svg
+          className="absolute pointer-events-none"
+          style={{ left: `calc(${pct * 100}% - 6px)`, top: 2 }}
+          width={12}
+          height={12}
+        >
+          <polygon points="6,0 12,11 0,11" fill="#c9a84c" opacity={0.9} />
+        </svg>
       </div>
     </div>
   )
 }
 
-function EventPreview({ vs }: { vs: VisualStyle }) {
+// ── EventPreview ─────────────────────────────────────────────────────────────
+
+function EventPreview({ vs, previewH }: { vs: VisualStyle; previewH: number }) {
   const fw = vs.frameWidth > 0 && vs.frameColor !== "transparent" ? vs.frameWidth : 0
   const fc = fw > 0 ? vs.frameColor : "transparent"
   const hasFrame = fw > 0
   const hasSide = vs.sideWidth > 0 && vs.sideColor !== "transparent"
-  const radius = vs.shape === "pill" ? "99px" : vs.shape === "rounded" ? "4px" : "0"
+  const hasCustomShape = !!vs.shapePath
+  const radius = hasCustomShape ? "0" : vs.shape === "pill" ? "99px" : vs.shape === "rounded" ? "4px" : "0"
+
+  const pts = pathToPoints(vs.shapePath)
+  const clipD = pts.length >= 3 ? smoothedPath(pts, vs.shapeSmoothing) : ""
+
+  const widthPct = vs.widthPercent ?? 100
+  const textPos = hasCustomShape ? vs.textPosition : null
 
   const blockStyle: React.CSSProperties = {
     position: "relative",
+    height: previewH,
+    width: `${widthPct}%`,
     backgroundColor: vs.fillColor === "transparent" ? "transparent" : vs.fillColor,
     borderRadius: radius,
-    borderTopWidth: fw,
-    borderTopStyle: hasFrame ? "solid" : "none",
-    borderTopColor: fc,
-    borderRightWidth: fw,
-    borderRightStyle: hasFrame ? "solid" : "none",
-    borderRightColor: fc,
-    borderBottomWidth: fw,
-    borderBottomStyle: hasFrame ? "solid" : "none",
-    borderBottomColor: fc,
-    borderLeftWidth: fw,
-    borderLeftStyle: hasFrame ? "solid" : "none",
-    borderLeftColor: fc,
+    // CSS border only for standard shapes
+    ...(hasCustomShape ? {} : {
+      borderTopWidth: fw,
+      borderTopStyle: hasFrame ? "solid" : "none",
+      borderTopColor: fc,
+      borderRightWidth: fw,
+      borderRightStyle: hasFrame ? "solid" : "none",
+      borderRightColor: fc,
+      borderBottomWidth: fw,
+      borderBottomStyle: hasFrame ? "solid" : "none",
+      borderBottomColor: fc,
+      borderLeftWidth: fw,
+      borderLeftStyle: hasFrame ? "solid" : "none",
+      borderLeftColor: fc,
+    }),
     overflow: "hidden",
     color: vs.textColor,
     fontFamily: vs.fontFamily !== "inherit" ? vs.fontFamily : undefined,
+    ...(hasCustomShape && clipD && { clipPath: "url(#style-preview-clip)" }),
   }
 
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Preview</span>
-      <div style={blockStyle} className="h-14 w-full">
+
+      {/* clip-path def */}
+      {hasCustomShape && clipD && (
+        <svg width={0} height={0} style={{ display: "block" }}>
+          <defs>
+            <clipPath id="style-preview-clip" clipPathUnits="objectBoundingBox">
+              <path d={clipD} />
+            </clipPath>
+          </defs>
+        </svg>
+      )}
+
+      <div style={blockStyle}>
+        {/* Side accent */}
         {hasSide && (
           <div
             className="absolute left-0 top-0 bottom-0 pointer-events-none"
             style={{
               width: vs.sideWidth,
               backgroundColor: vs.sideColor,
-              borderRadius: vs.shape !== "rectangle"
-                ? `calc(${radius} - ${fw}px) 0 0 calc(${radius} - ${fw}px)`
-                : 0,
+              borderRadius: hasCustomShape || vs.shape === "rectangle"
+                ? 0
+                : `calc(${radius} - ${fw}px) 0 0 calc(${radius} - ${fw}px)`,
             }}
           />
         )}
-        <div
-          className="h-full flex flex-col justify-center truncate"
-          style={{
-            paddingLeft: hasSide ? vs.sideWidth + 6 : Math.max(6, fw + 3),
-            paddingRight: Math.max(6, fw + 3),
-          }}
-        >
-          <span className="text-xs font-medium truncate">Event Title</span>
-          <span className="text-[10px] opacity-60">10:00 – 11:00</span>
-        </div>
+
+        {/* Text */}
+        {textPos ? (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: `${textPos.x * 100}%`,
+              top: `${textPos.y * 100}%`,
+              transform: "translate(-50%, -50%)",
+              maxWidth: "90%",
+              textAlign: "center",
+            }}
+          >
+            <span className="text-xs font-medium truncate block">Event Title</span>
+            <span className="text-[10px] opacity-60">10:00 – 11:00</span>
+          </div>
+        ) : (
+          <div
+            className="h-full flex flex-col justify-center truncate"
+            style={{
+              paddingLeft: hasSide ? vs.sideWidth + 6 : Math.max(6, fw + 3),
+              paddingRight: Math.max(6, fw + 3),
+            }}
+          >
+            <span className="text-xs font-medium truncate">Event Title</span>
+            <span className="text-[10px] opacity-60">10:00 – 11:00</span>
+          </div>
+        )}
+
+        {/* SVG frame stroke for custom shapes */}
+        {hasCustomShape && hasFrame && clipD && (
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            viewBox="0 0 1 1"
+            preserveAspectRatio="none"
+            style={{ overflow: "visible" }}
+          >
+            <path
+              d={clipD}
+              fill="none"
+              stroke={fc}
+              strokeWidth={fw}
+              vectorEffect="non-scaling-stroke"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
       </div>
     </div>
   )
 }
 
+// ── StyleTab ─────────────────────────────────────────────────────────────────
+
 interface StyleTabProps {
   vs: VisualStyle
   onChange: (patch: Partial<VisualStyle>) => void
+  durationPx: number
 }
 
-export default function StyleTab({ vs, onChange }: StyleTabProps) {
+export default function StyleTab({ vs, onChange, durationPx }: StyleTabProps) {
+  const previewH = Math.max(PX_PER_HOUR * 0.5, Math.min(PX_PER_HOUR * 4, durationPx))
+
   return (
     <div className="flex flex-col gap-5 py-1">
-      <EventPreview vs={vs} />
+      <EventPreview vs={vs} previewH={previewH} />
 
       {/* Fill */}
-      <div className="flex gap-3 items-end">
-        <div className="flex-1">
-          <ColorInput label="Fill" value={vs.fillColor} onChange={(v) => onChange({ fillColor: v })} />
-        </div>
-      </div>
+      <ColorInput label="Fill" value={vs.fillColor} onChange={(v) => onChange({ fillColor: v })} />
 
       {/* Frame */}
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <ColorInput label="Frame color" value={vs.frameColor} onChange={(v) => onChange({ frameColor: v })} />
-        </div>
-        <div className="w-36">
-          <WidthInput label="Frame width" value={vs.frameWidth} onChange={(v) => onChange({ frameWidth: v })} />
-        </div>
+      <div className="flex flex-col gap-2">
+        <ColorInput label="Frame color" value={vs.frameColor} onChange={(v) => onChange({ frameColor: v })} />
+        <WidthSlider label="Frame width" value={vs.frameWidth} onChange={(v) => onChange({ frameWidth: v })} max={8} />
       </div>
 
       {/* Side */}
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <ColorInput label="Side color" value={vs.sideColor} onChange={(v) => onChange({ sideColor: v })} />
-        </div>
-        <div className="w-36">
-          <WidthInput label="Side width" value={vs.sideWidth} onChange={(v) => onChange({ sideWidth: v })} max={6} />
-        </div>
+      <div className="flex flex-col gap-2">
+        <ColorInput label="Side color" value={vs.sideColor} onChange={(v) => onChange({ sideColor: v })} />
+        <WidthSlider label="Side width" value={vs.sideWidth} onChange={(v) => onChange({ sideWidth: v })} max={12} />
       </div>
 
       {/* Text color */}
       <ColorInput label="Text color" value={vs.textColor} onChange={(v) => onChange({ textColor: v })} />
 
-      {/* Shape */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Shape</span>
-        <div className="flex gap-1">
-          {(["rectangle", "rounded", "pill"] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onChange({ shape: s })}
-              className={`flex-1 py-1.5 text-xs capitalize rounded border transition-colors ${
-                vs.shape === s
-                  ? "bg-doom-gold text-navy-950 border-doom-gold"
-                  : "bg-smoke-800 border-smoke-700 text-smoke-400 hover:text-smoke-200"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Shape — polygon editor */}
+      <PolygonEditor
+        shapePath={vs.shapePath ?? null}
+        onChange={(p) => onChange({ shapePath: p })}
+        canvasHeight={durationPx}
+        smoothing={vs.shapeSmoothing}
+        onSmoothing={(v) => onChange({ shapeSmoothing: v })}
+        textPosition={vs.textPosition}
+        onTextPosition={(p) => onChange({ textPosition: p })}
+        widthPercent={vs.widthPercent}
+        onWidthPercent={(v) => onChange({ widthPercent: v })}
+      />
 
       {/* Font */}
       <div className="flex flex-col gap-1.5">

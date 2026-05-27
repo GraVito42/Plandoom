@@ -16,6 +16,10 @@ const visualStyleSchema = z.object({
   fontFamily: z.string(),
   hasCheckbox: z.boolean(),
   isChecked: z.boolean(),
+  shapePath: z.string().nullable().optional(),
+  shapeSmoothing: z.number().min(0).max(100).optional(),
+  textPosition: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
+  widthPercent: z.number().min(50).max(100).optional(),
 })
 
 const repetitionSchema = z.object({
@@ -48,6 +52,58 @@ const createEventSchema = z.object({
   folderFieldValues: z.record(z.string(), z.unknown()).optional(),
 })
 
+// ── Occurrence date generation ────────────────────────────────────────────────
+
+const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+
+const DEFAULT_COUNTS: Record<string, number> = {
+  daily: 30,
+  weekly: 52,
+  monthly: 12,
+  yearly: 3,
+}
+
+function generateOccurrenceDates(
+  start: Date,
+  end: Date,
+  rep: z.infer<typeof repetitionSchema>,
+): Array<{ startTime: Date; endTime: Date }> {
+  const durationMs = end.getTime() - start.getTime()
+  const results: Array<{ startTime: Date; endTime: Date }> = []
+  const HARD_MAX = 500
+
+  const limitDate = rep.endDate ? new Date(rep.endDate + "T23:59:59") : null
+  const limitCount = rep.count ?? DEFAULT_COUNTS[rep.type] ?? 52
+
+  if (rep.type === "weekly" && rep.days && rep.days.length > 0) {
+    const cursor = new Date(start)
+    for (let guard = 0; results.length < Math.min(limitCount, HARD_MAX) && guard < 10000; guard++) {
+      const dayName = DAY_NAMES[cursor.getDay()]
+      if (rep.days.includes(dayName)) {
+        if (limitDate && cursor > limitDate) break
+        results.push({ startTime: new Date(cursor), endTime: new Date(cursor.getTime() + durationMs) })
+      }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+  } else {
+    const cursor = new Date(start)
+    while (results.length < Math.min(limitCount, HARD_MAX)) {
+      if (limitDate && cursor > limitDate) break
+      results.push({ startTime: new Date(cursor), endTime: new Date(cursor.getTime() + durationMs) })
+      switch (rep.type) {
+        case "daily":   cursor.setDate(cursor.getDate() + 1); break
+        case "weekly":  cursor.setDate(cursor.getDate() + 7); break
+        case "monthly": cursor.setMonth(cursor.getMonth() + 1); break
+        case "yearly":  cursor.setFullYear(cursor.getFullYear() + 1); break
+      }
+    }
+  }
+
+  return results
+}
+
+// ── GET ───────────────────────────────────────────────────────────────────────
+
 export async function GET(request: Request) {
   try {
     const user = await ensureUser()
@@ -74,40 +130,84 @@ export async function GET(request: Request) {
   }
 }
 
+// ── POST ──────────────────────────────────────────────────────────────────────
+
 export async function POST(request: Request) {
   try {
     const user = await ensureUser()
     const body: unknown = await request.json()
     const data = createEventSchema.parse(body)
 
-    const event = await db.event.create({
-      data: {
-        title: data.title,
-        description: data.description,
-        startTime: new Date(data.startTime),
-        endTime: new Date(data.endTime),
-        isFlexible: data.isFlexible,
-        isFullDay: data.isFullDay,
-        timezone: data.timezone,
-        qualitativeTiming: data.qualitativeTiming,
-        location: data.location,
-        locationUrl: data.locationUrl,
-        repetition: data.repetition as unknown as Prisma.InputJsonValue ?? undefined,
-        folderId: data.folderId,
-        visualStyle: data.visualStyle as unknown as Prisma.InputJsonValue ?? undefined,
-        mentalEnergy: data.mentalEnergy,
-        physicalEnergy: data.physicalEnergy,
-        difficulty: data.difficulty,
-        pleasure: data.pleasure,
-        isFixed: data.isFixed,
-        productivityModel: data.productivityModel,
-        folderFieldValues: data.folderFieldValues as unknown as Prisma.InputJsonValue ?? undefined,
-        userId: user.id,
-        source: "plandoom",
-      },
-    })
+    const sharedData = {
+      title: data.title,
+      description: data.description,
+      isFlexible: data.isFlexible,
+      isFullDay: data.isFullDay,
+      timezone: data.timezone,
+      qualitativeTiming: data.qualitativeTiming,
+      location: data.location,
+      locationUrl: data.locationUrl,
+      folderId: data.folderId,
+      visualStyle: data.visualStyle as unknown as Prisma.InputJsonValue ?? undefined,
+      mentalEnergy: data.mentalEnergy,
+      physicalEnergy: data.physicalEnergy,
+      difficulty: data.difficulty,
+      pleasure: data.pleasure,
+      isFixed: data.isFixed,
+      productivityModel: data.productivityModel,
+      folderFieldValues: data.folderFieldValues as unknown as Prisma.InputJsonValue ?? undefined,
+      userId: user.id,
+      source: "plandoom",
+    }
 
+    if (data.repetition) {
+      const occurrences = generateOccurrenceDates(
+        new Date(data.startTime),
+        new Date(data.endTime),
+        data.repetition,
+      )
+
+      if (occurrences.length === 0) {
+        // no valid occurrences — create single event without repetition
+        const event = await db.event.create({
+          data: { ...sharedData, startTime: new Date(data.startTime), endTime: new Date(data.endTime) },
+        })
+        return NextResponse.json(event, { status: 201 })
+      }
+
+      const [first, ...rest] = occurrences
+
+      // Parent = first occurrence, carries the repetition config
+      const parent = await db.event.create({
+        data: {
+          ...sharedData,
+          startTime: first.startTime,
+          endTime: first.endTime,
+          repetition: data.repetition as unknown as Prisma.InputJsonValue,
+        },
+      })
+
+      // Child occurrences
+      if (rest.length > 0) {
+        await db.event.createMany({
+          data: rest.map((occ) => ({
+            ...sharedData,
+            startTime: occ.startTime,
+            endTime: occ.endTime,
+            parentEventId: parent.id,
+          })),
+        })
+      }
+
+      return NextResponse.json({ id: parent.id, count: occurrences.length }, { status: 201 })
+    }
+
+    // No repetition — single event
+    const event = await db.event.create({
+      data: { ...sharedData, startTime: new Date(data.startTime), endTime: new Date(data.endTime) },
+    })
     return NextResponse.json(event, { status: 201 })
+
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid data", details: err.issues }, { status: 400 })
@@ -115,6 +215,7 @@ export async function POST(request: Request) {
     if (err instanceof Error && err.message === "Non autenticato") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[POST /api/events]", err)
+    return NextResponse.json({ error: "Internal server error", detail: String(err) }, { status: 500 })
   }
 }

@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import type { ApiEvent, VisualStyle, RepetitionConfig } from "@/types"
+import { PX_PER_HOUR } from "@/hooks/useGrid"
 import StyleTab from "./tabs/StyleTab"
 import ContentTab from "./tabs/ContentTab"
 import type { ContentDraft } from "./tabs/ContentTab"
@@ -22,11 +23,16 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   hasCheckbox: false,
   isChecked: false,
   eventType: "default",
+  shapePath: null,
+  shapeSmoothing: 0,
+  textPosition: null,
+  widthPercent: 100,
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
   if (!raw || typeof raw !== "object") return DEFAULT_VISUAL_STYLE
   const r = raw as Record<string, unknown>
+  const tp = r.textPosition as { x: number; y: number } | null | undefined
   return {
     shape: (r.shape as VisualStyle["shape"]) ?? "rounded",
     frameColor: (r.frameColor as string) ?? "transparent",
@@ -39,6 +45,10 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     hasCheckbox: (r.hasCheckbox as boolean) ?? false,
     isChecked: (r.isChecked as boolean) ?? false,
     eventType: (r.eventType as string) ?? "default",
+    shapePath: typeof r.shapePath === "string" ? r.shapePath : null,
+    shapeSmoothing: typeof r.shapeSmoothing === "number" ? r.shapeSmoothing : 0,
+    textPosition: tp && typeof tp.x === "number" && typeof tp.y === "number" ? tp : null,
+    widthPercent: typeof r.widthPercent === "number" ? r.widthPercent : 100,
   }
 }
 
@@ -50,8 +60,8 @@ function toLocalTime(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
 }
 
-type MainTab = "style" | "content" | "folder"
-type BottomTab = "lindo" | "seendo" | "prodo"
+// "content" = default center; others replace center with that Golem panel
+type CenterView = "content" | "lindo" | "seendo" | "prodo"
 
 type EventDraft = ContentDraft & {
   visualStyle: VisualStyle
@@ -145,6 +155,93 @@ interface EventFormProps {
   onClose: () => void
 }
 
+const GOLEM_BUTTONS: { id: CenterView; label: string }[] = [
+  { id: "lindo", label: "Lindo" },
+  { id: "seendo", label: "Seendo" },
+  { id: "prodo", label: "Prodo" },
+]
+
+const CENTER_LABELS: Record<CenterView, string> = {
+  content: "Content",
+  lindo: "Lindo",
+  seendo: "Seendo",
+  prodo: "Prodo",
+}
+
+// ── Scope dialog ──────────────────────────────────────────────────────────────
+
+type PendingAction = "save" | "delete" | null
+
+interface ScopeDialogProps {
+  action: "save" | "delete"
+  onChoose: (scope: "this" | "all") => void
+  onCancel: () => void
+}
+
+function ScopeDialog({ action, onChoose, onCancel }: ScopeDialogProps) {
+  const verb = action === "save" ? "Save changes to" : "Delete"
+  return (
+    <div className="absolute inset-0 bg-navy-950/75 flex items-center justify-center z-20 rounded-xl backdrop-blur-sm">
+      <div className="bg-smoke-800 border border-smoke-600 rounded-xl p-5 flex flex-col gap-4 w-72 shadow-2xl">
+        <p className="text-sm text-smoke-200 font-medium">{verb}:</p>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => onChoose("this")}
+            className="w-full px-4 py-2.5 text-sm text-left rounded-lg bg-smoke-700 hover:bg-smoke-600 text-smoke-100 transition-colors border border-smoke-600 hover:border-smoke-500"
+          >
+            Only this occurrence
+          </button>
+          <button
+            type="button"
+            onClick={() => onChoose("all")}
+            className="w-full px-4 py-2.5 text-sm text-left rounded-lg bg-doom-gold/10 hover:bg-doom-gold/20 text-doom-gold border border-doom-gold/30 hover:border-doom-gold/50 transition-colors"
+          >
+            All occurrences in this series
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-smoke-500 hover:text-smoke-300 transition-colors self-end"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── FolderStylePrompt ─────────────────────────────────────────────────────────
+
+function FolderStylePrompt({ onApply, onKeep }: { onApply: () => void; onKeep: () => void }) {
+  return (
+    <div className="absolute inset-0 bg-navy-950/75 flex items-center justify-center z-20 rounded-xl backdrop-blur-sm">
+      <div className="bg-smoke-800 border border-smoke-600 rounded-xl p-5 flex flex-col gap-4 w-72 shadow-2xl">
+        <p className="text-sm text-smoke-200 font-medium">Apply new folder style?</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onApply}
+            className="flex-1 px-4 py-2 text-sm rounded-lg bg-doom-gold/10 hover:bg-doom-gold/20 text-doom-gold border border-doom-gold/30 hover:border-doom-gold/50 transition-colors"
+          >
+            Apply
+          </button>
+          <button
+            type="button"
+            onClick={onKeep}
+            className="flex-1 px-4 py-2 text-sm rounded-lg bg-smoke-700 hover:bg-smoke-600 text-smoke-200 border border-smoke-600 hover:border-smoke-500 transition-colors"
+          >
+            Keep current
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── EventForm ─────────────────────────────────────────────────────────────────
+
 export default function EventForm({
   date,
   startHour,
@@ -158,10 +255,20 @@ export default function EventForm({
   const [draft, setDraft] = useState<EventDraft>(() =>
     initDraft(eventToEdit, date, startHour, prefillTitle, prefillDescription)
   )
-  const [mainTab, setMainTab] = useState<MainTab>("content")
-  const [bottomTab, setBottomTab] = useState<BottomTab | null>(null)
+  const [centerView, setCenterView] = useState<CenterView>("content")
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null)
+  const [folderStylePending, setFolderStylePending] = useState<VisualStyle | null>(null)
+
+  // Track the last folderId to distinguish first selection vs folder change
+  const prevFolderIdRef = useRef<string>(eventToEdit?.folderId ?? "")
+
+  // An event is "recurring" if it belongs to a series
+  const isRecurring = !!eventToEdit && (
+    eventToEdit.parentEventId !== null ||
+    eventToEdit.repetition !== null
+  )
 
   function patch(partial: Partial<EventDraft>) {
     setDraft((prev) => ({ ...prev, ...partial }))
@@ -175,6 +282,27 @@ export default function EventForm({
     setDraft((prev) => ({ ...prev, visualStyle: { ...prev.visualStyle, ...partial } }))
   }
 
+  function applyVS(vs: VisualStyle) {
+    setDraft((prev) => ({ ...prev, visualStyle: vs }))
+  }
+
+  function handleFolderChange(newFolderId: string, folderVisualStyle: unknown) {
+    const prevId = prevFolderIdRef.current
+    prevFolderIdRef.current = newFolderId
+
+    if (!newFolderId || !folderVisualStyle) return  // clearing or folder has no style
+
+    const newStyle = parseVisualStyle(folderVisualStyle)
+
+    if (!prevId) {
+      // First selection: apply immediately
+      applyVS(newStyle)
+    } else {
+      // Changing from one folder to another: ask
+      setFolderStylePending(newStyle)
+    }
+  }
+
   function setFieldValue(fieldId: string, value: unknown) {
     setDraft((prev) => ({
       ...prev,
@@ -182,192 +310,264 @@ export default function EventForm({
     }))
   }
 
-  async function save() {
+  function toggleGolem(id: CenterView) {
+    setCenterView((prev) => (prev === id ? "content" : id))
+  }
+
+  // Build the request body from current draft
+  function buildBody() {
+    const startISO = new Date(`${draft.startDate}T${draft.startTime}:00`).toISOString()
+    const endISO = new Date(`${draft.endDate}T${draft.endTime}:00`).toISOString()
+    return {
+      title: draft.title.trim(),
+      description: draft.description || undefined,
+      startTime: startISO,
+      endTime: endISO,
+      isFlexible: false,
+      isFullDay: draft.isFullDay,
+      timezone: draft.timezone || undefined,
+      qualitativeTiming: draft.qualitativeTiming || undefined,
+      location: draft.location || undefined,
+      locationUrl: draft.locationUrl || undefined,
+      repetition: draft.repetition ?? undefined,
+      folderId: draft.folderId || undefined,
+      visualStyle: draft.visualStyle,
+      mentalEnergy: draft.mentalEnergy,
+      physicalEnergy: draft.physicalEnergy,
+      difficulty: draft.difficulty,
+      pleasure: draft.pleasure,
+      isFixed: draft.isFixed,
+      productivityModel: draft.productivityModel || undefined,
+      folderFieldValues:
+        Object.keys(draft.folderFieldValues).length > 0 ? draft.folderFieldValues : undefined,
+    }
+  }
+
+  async function doSave(scope: "this" | "all") {
     if (!draft.title.trim()) return
     setSaving(true)
     try {
-      const startISO = new Date(`${draft.startDate}T${draft.startTime}:00`).toISOString()
-      const endISO = new Date(`${draft.endDate}T${draft.endTime}:00`).toISOString()
-
-      const body = {
-        title: draft.title.trim(),
-        description: draft.description || undefined,
-        startTime: startISO,
-        endTime: endISO,
-        isFlexible: false,
-        isFullDay: draft.isFullDay,
-        timezone: draft.timezone || undefined,
-        qualitativeTiming: draft.qualitativeTiming || undefined,
-        location: draft.location || undefined,
-        locationUrl: draft.locationUrl || undefined,
-        repetition: draft.repetition ?? undefined,
-        folderId: draft.folderId || undefined,
-        visualStyle: draft.visualStyle,
-        isExternalLinked: draft.isExternalLinked,
-        mentalEnergy: draft.mentalEnergy,
-        physicalEnergy: draft.physicalEnergy,
-        difficulty: draft.difficulty,
-        pleasure: draft.pleasure,
-        isFixed: draft.isFixed,
-        productivityModel: draft.productivityModel || undefined,
-        folderFieldValues: Object.keys(draft.folderFieldValues).length > 0 ? draft.folderFieldValues : undefined,
-      }
+      const body = buildBody()
+      let res: Response
 
       if (eventToEdit) {
-        await fetch(`/api/events/${eventToEdit.id}`, {
+        res = await fetch(`/api/events/${eventToEdit.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...body, scope }),
         })
       } else {
-        await fetch("/api/events", {
+        res = await fetch("/api/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         })
       }
 
+      if (!res.ok) {
+        const raw = await res.text().catch(() => "")
+        let errBody: unknown = raw
+        try { errBody = JSON.parse(raw) } catch { /* not JSON */ }
+        console.error("[EventForm] save failed", res.status, errBody)
+        return
+      }
+
       await onSave()
+    } catch (err) {
+      console.error("[EventForm] save error", err)
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete() {
+  async function doDelete(scope: "this" | "all") {
     if (!eventToEdit) return
     setDeleting(true)
     try {
-      await onDelete(eventToEdit.id)
+      if (scope === "all") {
+        await fetch(`/api/events/${eventToEdit.id}?scope=all`, { method: "DELETE" })
+        await onSave() // refresh grid
+      } else {
+        await onDelete(eventToEdit.id)
+      }
     } finally {
       setDeleting(false)
     }
   }
 
-  const MAIN_TABS: { id: MainTab; label: string }[] = [
-    { id: "style", label: "Style" },
-    { id: "content", label: "Content" },
-    { id: "folder", label: "Folder" },
-  ]
+  function handleSaveClick() {
+    if (!draft.title.trim()) return
+    if (isRecurring) {
+      setPendingAction("save")
+      return
+    }
+    void doSave("this")
+  }
 
-  const BOTTOM_TABS: { id: BottomTab; label: string }[] = [
-    { id: "lindo", label: "Lindo" },
-    { id: "seendo", label: "Seendo" },
-    { id: "prodo", label: "Prodo" },
-  ]
+  function handleDeleteClick() {
+    if (!eventToEdit) return
+    if (isRecurring) {
+      setPendingAction("delete")
+      return
+    }
+    void doDelete("this")
+  }
 
-  const seendoImages = Array.isArray(draft.visualStyle)
-    ? []
-    : (eventToEdit?.seendoImages as string[] | null) ?? []
+  function handleScopeChoice(scope: "this" | "all") {
+    const action = pendingAction
+    setPendingAction(null)
+    if (action === "save") void doSave(scope)
+    else if (action === "delete") void doDelete(scope)
+  }
+
+  const seendoImages = (eventToEdit?.seendoImages as string[] | null) ?? []
+
+  const durationPx = (() => {
+    try {
+      const s = new Date(`${draft.startDate}T${draft.startTime}:00`)
+      const e = new Date(`${draft.endDate}T${draft.endTime}:00`)
+      const diffMinutes = Math.max(15, (e.getTime() - s.getTime()) / 60_000)
+      return diffMinutes * (PX_PER_HOUR / 60)
+    } catch {
+      return PX_PER_HOUR
+    }
+  })()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-navy-950/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="relative z-10 w-full max-w-4xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[88vh]">
+
+        {/* Scope dialog overlay */}
+        {pendingAction && (
+          <ScopeDialog
+            action={pendingAction}
+            onChoose={handleScopeChoice}
+            onCancel={() => setPendingAction(null)}
+          />
+        )}
+
+        {/* Folder style confirmation overlay */}
+        {folderStylePending && (
+          <FolderStylePrompt
+            onApply={() => { applyVS(folderStylePending); setFolderStylePending(null) }}
+            onKeep={() => setFolderStylePending(null)}
+          />
+        )}
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-smoke-700 shrink-0">
-          <h2 className="text-sm font-semibold text-smoke-200 truncate">
-            {eventToEdit ? eventToEdit.title || "Edit event" : "New event"}
-          </h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-sm font-semibold text-smoke-200 truncate">
+              {eventToEdit ? (eventToEdit.title || "Edit event") : "New event"}
+            </h2>
+            {isRecurring && (
+              <span className="text-[10px] text-doom-gold/70 shrink-0">↻ recurring</span>
+            )}
+          </div>
           <button
             onClick={onClose}
-            className="text-smoke-500 hover:text-smoke-200 transition-colors text-lg leading-none ml-2 shrink-0"
+            className="text-smoke-500 hover:text-smoke-200 transition-colors text-lg leading-none ml-4 shrink-0"
           >
             ✕
           </button>
         </div>
 
-        {/* Main tab bar */}
-        <div className="flex border-b border-smoke-700 shrink-0">
-          {MAIN_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setMainTab(t.id)}
-              className={`flex-1 py-2.5 text-xs font-medium tracking-wide transition-colors border-b-2 ${
-                mainTab === t.id
-                  ? "text-doom-gold border-doom-gold"
-                  : "text-smoke-500 border-transparent hover:text-smoke-300"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Column labels */}
+        <div className="grid grid-cols-3 shrink-0 border-b border-smoke-700">
+          <div className="px-4 py-1.5 border-r border-smoke-700">
+            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Style</span>
+          </div>
+          <div className="px-4 py-1.5 border-r border-smoke-700">
+            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">
+              {CENTER_LABELS[centerView]}
+            </span>
+          </div>
+          <div className="px-4 py-1.5">
+            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Folder Features</span>
+          </div>
         </div>
 
-        {/* Main tab content */}
-        <div className="flex-1 overflow-y-auto px-5 py-3 min-h-0">
-          {mainTab === "style" && (
-            <StyleTab vs={draft.visualStyle} onChange={patchVS} />
-          )}
-          {mainTab === "content" && (
-            <ContentTab draft={draft} onChange={patchContent} />
-          )}
-          {mainTab === "folder" && (
+        {/* Three columns — each scrolls independently */}
+        <div className="grid grid-cols-3 flex-1 min-h-0 divide-x divide-smoke-700 overflow-hidden">
+
+          {/* Left — Style always visible */}
+          <div className="overflow-y-auto px-4 py-3">
+            <StyleTab vs={draft.visualStyle} onChange={patchVS} durationPx={durationPx} />
+          </div>
+
+          {/* Center — Content or active Golem panel */}
+          <div className="overflow-y-auto px-4 py-3">
+            {centerView === "content" && (
+              <ContentTab
+                draft={draft}
+                onChange={patchContent}
+                onFolderChange={handleFolderChange}
+              />
+            )}
+            {centerView === "lindo" && (
+              <LindoPanel
+                isExternalLinked={draft.isExternalLinked}
+                onChange={(v) => patch({ isExternalLinked: v })}
+              />
+            )}
+            {centerView === "seendo" && (
+              <SeendoPanel seendoImages={seendoImages} eventId={eventToEdit?.id ?? null} />
+            )}
+            {centerView === "prodo" && (
+              <ProDoPanel draft={draft} onChange={patch} />
+            )}
+          </div>
+
+          {/* Right — Folder Features always visible */}
+          <div className="overflow-y-auto px-4 py-3">
             <FolderTab
               folderId={draft.folderId}
               folderFieldValues={draft.folderFieldValues}
               onFieldValueChange={setFieldValue}
             />
-          )}
-        </div>
-
-        {/* Golem bottom bar */}
-        <div className="border-t border-smoke-700 shrink-0">
-          <div className="flex">
-            {BOTTOM_TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setBottomTab(bottomTab === t.id ? null : t.id)}
-                className={`flex-1 py-2 text-[10px] font-medium tracking-widest uppercase transition-colors border-b-2 ${
-                  bottomTab === t.id
-                    ? "text-doom-gold border-doom-gold"
-                    : "text-smoke-600 border-transparent hover:text-smoke-400"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
           </div>
 
-          {bottomTab !== null && (
-            <div className="px-5 py-3 max-h-48 overflow-y-auto border-t border-smoke-800">
-              {bottomTab === "lindo" && (
-                <LindoPanel
-                  isExternalLinked={draft.isExternalLinked}
-                  onChange={(v) => patch({ isExternalLinked: v })}
-                />
-              )}
-              {bottomTab === "seendo" && (
-                <SeendoPanel
-                  seendoImages={seendoImages}
-                  eventId={eventToEdit?.id ?? null}
-                />
-              )}
-              {bottomTab === "prodo" && (
-                <ProDoPanel draft={draft} onChange={patch} />
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Action bar */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-smoke-700 shrink-0">
-          <div>
+        {/* Bottom bar: Delete | Golem toggles | Cancel + Save */}
+        <div className="flex items-center justify-between gap-4 px-5 py-3 border-t border-smoke-700 shrink-0">
+
+          {/* Left: Delete */}
+          <div className="w-20 shrink-0">
             {eventToEdit && (
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={handleDeleteClick}
                 disabled={deleting}
-                className="px-3 py-1.5 text-xs text-doom-ember hover:text-doom-ember/80 disabled:opacity-40 transition-colors"
+                className="px-3 py-1.5 text-xs text-doom-ember hover:text-doom-ember/70 disabled:opacity-40 transition-colors"
               >
                 {deleting ? "Deleting…" : "Delete"}
               </button>
             )}
           </div>
-          <div className="flex gap-2">
+
+          {/* Center: Golem toggle buttons */}
+          <div className="flex gap-1.5">
+            {GOLEM_BUTTONS.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => toggleGolem(g.id)}
+                className={`px-4 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                  centerView === g.id
+                    ? "text-doom-gold border-doom-gold/60 bg-navy-800"
+                    : "text-smoke-500 border-smoke-700 hover:text-smoke-300 hover:border-smoke-500"
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: Cancel + Save */}
+          <div className="flex gap-2 items-center w-36 justify-end shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -377,13 +577,14 @@ export default function EventForm({
             </button>
             <button
               type="button"
-              onClick={save}
+              onClick={handleSaveClick}
               disabled={saving || !draft.title.trim()}
               className="px-4 py-1.5 text-xs font-medium bg-doom-gold text-navy-950 rounded-lg hover:bg-doom-gold/80 disabled:opacity-40 transition-colors"
             >
               {saving ? "Saving…" : eventToEdit ? "Save" : "Create"}
             </button>
           </div>
+
         </div>
 
       </div>
