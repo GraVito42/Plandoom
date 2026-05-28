@@ -34,7 +34,7 @@ export default function Chip({
 }: ChipProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `chip-${chip.id}`,
-    data: { type: "chip", chipId: chip.id, title: chip.title },
+    data: { type: "chip", chipId: chip.id, title: chip.title, duration: chip.duration },
     disabled: !draggable,
   })
 

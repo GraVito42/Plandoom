@@ -2,12 +2,7 @@
 
 import { useRef, useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  useDndMonitor,
-  DragOverlay,
-  type DragStartEvent,
-  type DragEndEvent,
-} from "@dnd-kit/core"
+import { DragOverlay } from "@dnd-kit/core"
 import {
   useGrid,
   DAY_NAMES,
@@ -15,6 +10,8 @@ import {
   HOUR_END,
   PX_PER_HOUR,
 } from "@/hooks/useGrid"
+import { useChips } from "@/hooks/useChips"
+import { useDragDrop } from "@/hooks/useDragDrop"
 import type { ApiEvent, ApiChip } from "@/types"
 import DayColumn from "./DayColumn"
 import EventForm from "../events/EventForm/EventForm"
@@ -70,12 +67,6 @@ export default function WeekGrid() {
   const [plandoOpen, setPlandoOpen] = useState(false)
   const [glandoOpen, setGlandoOpen] = useState(false)
 
-  // Drag overlay state
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [activeEvent, setActiveEvent] = useState<ApiEvent | null>(null)
-  const [activeChip, setActiveChip] = useState<{ title: string } | null>(null)
-  const [activeDims, setActiveDims] = useState<{ width: number; height: number } | null>(null)
-
   // Resize state — ref avoids stale closures in the async handler
   const [resizing, setResizingState] = useState<ResizeState | null>(null)
   const resizingRef = useRef<ResizeState | null>(null)
@@ -98,16 +89,8 @@ export default function WeekGrid() {
     },
   })
 
-  const { data: dailyChips = [] } = useQuery<ApiChip[]>({
-    queryKey: ["chips", "daily", weekStart.toISOString()],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/chips?area=daily&weekStart=${weekStart.toISOString()}&weekEnd=${weekEnd.toISOString()}`
-      )
-      if (!res.ok) throw new Error("Failed to load chips")
-      return res.json() as Promise<ApiChip[]>
-    },
-  })
+  const { chipsForDay } = useChips(weekStart, weekEnd)
+  const { activeEvent, activeChip, activeDims } = useDragDrop(events)
 
   // ── Auto-scroll to current time on mount ────────────────────────────────────
   useEffect(() => {
@@ -124,16 +107,6 @@ export default function WeekGrid() {
       return s.getFullYear() === date.getFullYear() &&
         s.getMonth() === date.getMonth() &&
         s.getDate() === date.getDate()
-    })
-  }
-
-  function chipsForDay(date: Date): ApiChip[] {
-    return dailyChips.filter((chip) => {
-      if (!chip.dayTarget) return false
-      const t = new Date(chip.dayTarget)
-      return t.getFullYear() === date.getFullYear() &&
-        t.getMonth() === date.getMonth() &&
-        t.getDate() === date.getDate()
     })
   }
 
@@ -177,93 +150,6 @@ export default function WeekGrid() {
     await queryClient.invalidateQueries({ queryKey: ["events"] })
     closeEditor()
   }
-
-  // ── Drag-to-move / chip-to-event ─────────────────────────────────────────────
-  // useDndMonitor subscribes to the parent DndContext (in AppDndProvider/layout)
-  useDndMonitor({
-    onDragStart({ active }: DragStartEvent) {
-      const id = active.id as string
-      setActiveId(id)
-      const data = active.data.current as { type: string; chipId?: string; title?: string } | undefined
-      if (data?.type === "event") {
-        setActiveEvent(events.find((e) => e.id === id) ?? null)
-        setActiveChip(null)
-      } else if (data?.type === "chip") {
-        setActiveChip({ title: data.title ?? "" })
-        setActiveEvent(null)
-      }
-      const rect = active.rect.current.initial
-      if (rect) setActiveDims({ width: rect.width, height: rect.height })
-    },
-
-    async onDragEnd({ active, over, delta }: DragEndEvent) {
-      const draggedId = activeId
-      setActiveId(null)
-      setActiveEvent(null)
-      setActiveChip(null)
-      setActiveDims(null)
-
-      if (!over || !draggedId) return
-
-      const data = active.data.current as { type: string; chipId?: string } | undefined
-      const targetDateStr = over.id as string // "YYYY-MM-DD"
-      const [year, month, day] = targetDateStr.split("-").map(Number)
-
-      if (data?.type === "event") {
-        const event = events.find((e) => e.id === draggedId)
-        if (!event) return
-
-        const originalStart = new Date(event.startTime)
-        const originalEnd = new Date(event.endTime)
-        const durationMs = originalEnd.getTime() - originalStart.getTime()
-        const deltaMinutes = snap15(delta.y / (PX_PER_HOUR / 60))
-
-        const newStart = new Date(originalStart)
-        newStart.setFullYear(year, month - 1, day)
-        newStart.setMinutes(newStart.getMinutes() + deltaMinutes)
-        // Clamp to the target day: 00:00 – 23:45
-        const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0)
-        const dayLast = new Date(year, month - 1, day, 23, 45, 0, 0)
-        if (newStart < dayStart) newStart.setTime(dayStart.getTime())
-        if (newStart > dayLast) newStart.setTime(dayLast.getTime())
-        const newEnd = new Date(newStart.getTime() + durationMs)
-
-        await fetch(`/api/events/${draggedId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ startTime: newStart.toISOString(), endTime: newEnd.toISOString() }),
-        })
-        await queryClient.invalidateQueries({ queryKey: ["events"] })
-
-      } else if (data?.type === "chip") {
-        const chipId = data.chipId!
-
-        // Calculate target hour from drop viewport position relative to the DayColumn
-        const dropTop = active.rect.current.translated?.top ?? 0
-        const columnTop = over.rect.top
-        const offsetInColumn = Math.max(0, dropTop - columnTop)
-        const hour = Math.max(HOUR_START, Math.min(HOUR_END - 1, HOUR_START + Math.floor(offsetInColumn / PX_PER_HOUR)))
-
-        const startTime = new Date(year, month - 1, day, hour, 0, 0, 0).toISOString()
-        const endTime = new Date(year, month - 1, day, Math.min(hour + 1, HOUR_END - 1), 0, 0, 0).toISOString()
-
-        await fetch(`/api/chips/${chipId}/convert`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ startTime, endTime }),
-        })
-        await queryClient.invalidateQueries({ queryKey: ["events"] })
-        await queryClient.invalidateQueries({ queryKey: ["chips"] })
-      }
-    },
-
-    onDragCancel() {
-      setActiveId(null)
-      setActiveEvent(null)
-      setActiveChip(null)
-      setActiveDims(null)
-    },
-  })
 
   // ── Resize ───────────────────────────────────────────────────────────────────
   function handleResizeStart(eventId: string, clientY: number) {

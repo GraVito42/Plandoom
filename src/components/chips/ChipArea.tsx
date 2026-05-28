@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useDroppable, useDndMonitor, type DragEndEvent } from "@dnd-kit/core"
 import type { ApiChip, ApiFolder, ChipArea as ChipAreaType, VisualStyle } from "@/types"
 import Chip from "./Chip"
 import ChipForm from "./ChipForm"
@@ -61,9 +62,7 @@ function isDefaultStyle(vs: VisualStyle): boolean {
 
 function resolveStyle(chip: ApiChip, folders: ApiFolder[]): VisualStyle {
   const chipVS = chip.visualStyle ? parseVisualStyle(chip.visualStyle) : null
-  // If chip has a non-default custom style, use it
   if (chipVS && !isDefaultStyle(chipVS)) return chipVS
-  // Fall back to folder style if available
   if (chip.folderId) {
     const folder = folders.find((f) => f.id === chip.folderId)
     if (folder?.visualStyle) return parseVisualStyle(folder.visualStyle)
@@ -74,6 +73,12 @@ function resolveStyle(chip: ApiChip, folders: ApiFolder[]): VisualStyle {
 function chipSizeUnits(duration: number | null): number {
   if (!duration) return 1
   return Math.min(4, Math.max(1, Math.round(duration / 30)))
+}
+
+// Derive local YYYY-MM-DD string from a dayTarget ISO string
+function toDateStr(dayTarget: string): string {
+  const d = new Date(dayTarget)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -109,6 +114,28 @@ export default function ChipArea({
     },
   })
 
+  // BUG 1: droppable drop zone for daily chip areas so weekly chips can be
+  // dragged here and reassigned to area="daily" for this specific day.
+  const isDaily = area === "daily" && !!dayTarget
+  const droppableId = isDaily ? `chip-daily-${toDateStr(dayTarget!)}` : `chip-noop-${area}`
+  const { setNodeRef, isOver } = useDroppable({ id: droppableId })
+
+  useDndMonitor({
+    async onDragEnd({ active, over }: DragEndEvent) {
+      // Only handle drops on this component's own daily drop zone
+      if (!isDaily || !over || over.id !== droppableId) return
+      const data = active.data.current as { type: string; chipId?: string } | undefined
+      if (data?.type !== "chip" || !data.chipId) return
+
+      await fetch(`/api/chips/${data.chipId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ area: "daily", dayTarget }),
+      })
+      await queryClient.invalidateQueries({ queryKey: ["chips"] })
+    },
+  })
+
   async function handleDelete(id: string) {
     await fetch(`/api/chips/${id}`, { method: "DELETE" })
     await queryClient.invalidateQueries({ queryKey: ["chips"] })
@@ -124,19 +151,22 @@ export default function ChipArea({
     setEditingChip(null)
   }
 
-  const layout = area === "daily" ? "horizontal" : "vertical"
-
   return (
-    <div className="flex flex-col gap-1">
-      {/* Chip list */}
-      <div className={layout === "horizontal" ? "flex flex-row flex-wrap gap-1" : "flex flex-col gap-1"}>
+    <div
+      ref={isDaily ? setNodeRef : undefined}
+      className={`flex flex-col gap-1 min-h-6 rounded transition-colors ${
+        isOver ? "bg-doom-gold/10" : ""
+      }`}
+    >
+      {/* BUG 3: always flex-col — daily chips stack vertically like all others */}
+      <div className="flex flex-col gap-1">
         {chips.map((chip) => (
           <Chip
             key={chip.id}
             chip={chip}
             visualStyle={resolveStyle(chip, folders)}
             sizeUnits={chipSizeUnits(chip.duration)}
-            layout={layout}
+            layout="vertical"
             draggable={draggable}
             onEdit={() => handleEdit(chip)}
             onSchedule={onSchedule}
@@ -152,7 +182,6 @@ export default function ChipArea({
         + Add chip
       </button>
 
-      {/* Create form */}
       {chipFormOpen && (
         <ChipForm
           area={area}
@@ -164,7 +193,6 @@ export default function ChipArea({
         />
       )}
 
-      {/* Edit form */}
       {editingChip && (
         <ChipForm
           chipToEdit={editingChip}
