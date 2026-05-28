@@ -105,6 +105,8 @@ interface PolygonEditorProps {
   onTextPosition: (pos: { x: number; y: number } | null) => void
   widthPercent: number
   onWidthPercent: (v: number) => void
+  leftOffset: number
+  onLeftOffset: (v: number) => void
 }
 
 export default function PolygonEditor({
@@ -117,6 +119,8 @@ export default function PolygonEditor({
   onTextPosition,
   widthPercent,
   onWidthPercent,
+  leftOffset,
+  onLeftOffset,
 }: PolygonEditorProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [svgW, setSvgW] = useState(220)
@@ -145,12 +149,14 @@ export default function PolygonEditor({
   const closedRef = useRef(closed)
   const ptrCleanupRef = useRef<(() => void) | null>(null)
   const widthCleanupRef = useRef<(() => void) | null>(null)
+  const leftWidthCleanupRef = useRef<(() => void) | null>(null)
   const textCleanupRef = useRef<(() => void) | null>(null)
   useEffect(() => { pointsRef.current = points }, [points])
   useEffect(() => { closedRef.current = closed }, [closed])
   useEffect(() => () => {
     ptrCleanupRef.current?.()
     widthCleanupRef.current?.()
+    leftWidthCleanupRef.current?.()
     textCleanupRef.current?.()
   }, [])
 
@@ -245,7 +251,7 @@ export default function PolygonEditor({
     window.addEventListener("pointercancel", onUp)
   }
 
-  // ── Drag width handle ─────────────────────────────────────────────────────────
+  // ── Drag width handle (right edge) ────────────────────────────────────────────
 
   function startWidthDrag(e: React.PointerEvent) {
     e.stopPropagation()
@@ -258,6 +264,33 @@ export default function PolygonEditor({
       window.removeEventListener("pointercancel", onUp)
     }
     widthCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", onUp)
+  }
+
+  // ── Drag left-offset handle ────────────────────────────────────────────────────
+
+  function svgXtoLeftOffsetPct(clientX: number): number {
+    const rect = svgRef.current!.getBoundingClientRect()
+    return Math.round(Math.max(0, Math.min(50, ((clientX - rect.left) / rect.width) * 100)))
+  }
+
+  function startLeftWidthDrag(e: React.PointerEvent) {
+    e.stopPropagation()
+    function onMove(ev: PointerEvent) { onLeftOffset(svgXtoLeftOffsetPct(ev.clientX)) }
+    function onUp(ev: PointerEvent) {
+      onLeftOffset(svgXtoLeftOffsetPct(ev.clientX))
+      leftWidthCleanupRef.current = null
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    leftWidthCleanupRef.current = () => {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       window.removeEventListener("pointercancel", onUp)
@@ -305,9 +338,10 @@ export default function PolygonEditor({
     onTextPosition(null)
   }
 
-  // ── Width indicator X ─────────────────────────────────────────────────────────
+  // ── Width / left-offset indicator X positions ─────────────────────────────────
 
   const widthLineX = (widthPercent / 100) * svgW
+  const leftLineX  = (leftOffset  / 100) * svgW
 
   // Pixel-space polyline for open drawing phase
   const polyPts = points.map((p) => `${(p.x * svgW).toFixed(1)},${(p.y * clampedH).toFixed(1)}`).join(" ")
@@ -378,7 +412,20 @@ export default function PolygonEditor({
           <line x1={svgW * 0.5} y1={0} x2={svgW * 0.5} y2={clampedH} stroke="#23262a" strokeWidth={1} />
           <line x1={0} y1={clampedH * 0.5} x2={svgW} y2={clampedH * 0.5} stroke="#23262a" strokeWidth={1} />
 
-          {/* Width indicator dashed line */}
+          {/* Left-offset dashed line */}
+          {closed && leftOffset > 0 && (
+            <line
+              x1={leftLineX} y1={0}
+              x2={leftLineX} y2={clampedH}
+              stroke="#9ca3af"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+              opacity={0.5}
+              pointerEvents="none"
+            />
+          )}
+
+          {/* Right-edge (widthPercent) dashed line */}
           {closed && (
             <line
               x1={widthLineX} y1={0}
@@ -464,16 +511,29 @@ export default function PolygonEditor({
             )
           })}
 
-          {/* Width drag triangle on right edge */}
+          {/* Left-offset handle ◄ — drag to set left edge */}
           {closed && (
             <g
-              transform={`translate(${svgW - 1},${clampedH / 2})`}
+              transform={`translate(${leftLineX},${clampedH / 2})`}
+              style={{ cursor: "ew-resize", touchAction: "none" }}
+              onPointerDown={startLeftWidthDrag}
+            >
+              <rect x={-4} y={-14} width={14} height={28} fill="transparent" />
+              {/* Triangle pointing right ► */}
+              <polygon points="8,-8 0,0 8,8" fill="#9ca3af" opacity={0.85} />
+              <line x1={0} y1={-9} x2={0} y2={9} stroke="#9ca3af" strokeWidth={1.5} opacity={0.6} />
+            </g>
+          )}
+
+          {/* Right-edge handle ◄ — drag to set right edge */}
+          {closed && (
+            <g
+              transform={`translate(${Math.min(svgW - 1, widthLineX)},${clampedH / 2})`}
               style={{ cursor: "ew-resize", touchAction: "none" }}
               onPointerDown={startWidthDrag}
             >
-              {/* Invisible hit area */}
               <rect x={-10} y={-14} width={14} height={28} fill="transparent" />
-              {/* Triangle pointing left ◄ — drag it to resize width */}
+              {/* Triangle pointing left ◄ */}
               <polygon points="-8,-8 0,0 -8,8" fill="#c9a84c" opacity={0.85} />
               <line x1={0} y1={-9} x2={0} y2={9} stroke="#c9a84c" strokeWidth={1.5} opacity={0.6} />
             </g>
@@ -556,11 +616,13 @@ export default function PolygonEditor({
         </div>
       )}
 
-      {/* ── Width percent display ─────────────────────────────────────────────── */}
+      {/* ── Offset / width display ────────────────────────────────────────────── */}
       {closed && (
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Width</span>
-          <span className="text-[10px] text-smoke-400 font-mono tabular-nums">{widthPercent}%</span>
+          <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Left / Right edge</span>
+          <span className="text-[10px] text-smoke-400 font-mono tabular-nums">
+            {leftOffset}% → {widthPercent}%
+          </span>
         </div>
       )}
 

@@ -13,7 +13,17 @@ export type VisualStyle = {
   shapePath: string | null  // SVG path with objectBoundingBox coords (0-1); null = use shape+radius fallback
   shapeSmoothing: number    // 0 = sharp corners, 100 = max cardinal-spline smoothing
   textPosition: { x: number; y: number } | null  // normalized [0,1]; null = standard padding layout
-  widthPercent: number      // 50-100: event block width as % of the grid column
+  widthPercent: number      // 50-100: event block right-edge position as % of the grid column
+  leftOffset: number        // 0-50: event block left-edge offset as % of the grid column
+}
+
+export type ApiPalette = {
+  id: string
+  name: string
+  type: string
+  colors: string[]
+  createdAt: string
+  updatedAt: string
 }
 
 export type QualitativeTiming = "morning" | "midday" | "afternoon" | "evening" | "night"

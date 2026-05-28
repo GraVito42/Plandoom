@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type React from "react"
-import type { VisualStyle } from "@/types"
+import type { VisualStyle, ApiPalette } from "@/types"
 import PolygonEditor from "./PolygonEditor"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
@@ -35,13 +36,19 @@ function ColorInput({
   value,
   onChange,
   label,
+  personalPresets = [],
+  onAddPreset,
 }: {
   value: string
   onChange: (v: string) => void
   label: string
+  personalPresets?: Array<{ id: string; name: string; color: string }>
+  onAddPreset?: (color: string, name: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [hex, setHex] = useState(value)
+  const [presetFormOpen, setPresetFormOpen] = useState(false)
+  const [presetName, setPresetName] = useState("")
   const pickerRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setHex(value) }, [value])
@@ -56,6 +63,14 @@ function ColorInput({
     setHex(v)
     onChange(v)
     setOpen(false)
+  }
+
+  function submitPreset() {
+    const name = presetName.trim()
+    if (!name || !onAddPreset) return
+    onAddPreset(value, name)
+    setPresetFormOpen(false)
+    setPresetName("")
   }
 
   const hexPreview = hex !== "transparent" && /^#[0-9a-fA-F]{3,6}$/.test(hex) ? hex : "#888888"
@@ -87,8 +102,8 @@ function ColorInput({
         {open && (
           <div className="absolute left-0 top-9 z-50 bg-smoke-900 border border-smoke-700 rounded-lg shadow-2xl p-3 w-52">
 
-            {/* Preset swatches */}
-            <div className="grid grid-cols-6 gap-1.5 mb-3">
+            {/* Built-in preset swatches */}
+            <div className="grid grid-cols-6 gap-1.5 mb-2">
               {COLOR_PRESETS.map((c) => (
                 <button
                   key={c}
@@ -109,8 +124,31 @@ function ColorInput({
               ))}
             </div>
 
+            {/* Personal presets */}
+            {personalPresets.length > 0 && (
+              <div className="border-t border-smoke-800 pt-2 mb-2">
+                <div className="grid grid-cols-6 gap-1.5">
+                  {personalPresets.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyColor(p.color)}
+                      title={p.name}
+                      className="w-6 h-6 rounded hover:scale-110 transition-transform overflow-hidden shrink-0"
+                      style={{
+                        outline: value === p.color ? "2px solid #c9a84c" : "1px solid #3a3f45",
+                        outlineOffset: value === p.color ? "2px" : "0px",
+                      }}
+                    >
+                      <span className="block w-full h-full" style={{ background: swatchBg(p.color) }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Custom color row: picker + hex input */}
-            <div className="flex gap-1.5 items-center">
+            <div className="flex gap-1.5 items-center mb-2">
               <div
                 className="relative w-7 h-7 rounded border border-smoke-600 cursor-pointer shrink-0 overflow-hidden"
                 onClick={() => pickerRef.current?.click()}
@@ -136,6 +174,48 @@ function ColorInput({
                 placeholder="#000000"
               />
             </div>
+
+            {/* Save as preset */}
+            {onAddPreset && !presetFormOpen && (
+              <button
+                type="button"
+                onClick={() => setPresetFormOpen(true)}
+                className="w-full text-left text-[10px] text-smoke-500 hover:text-smoke-300 transition-colors border-t border-smoke-800 pt-2"
+              >
+                + Save as preset
+              </button>
+            )}
+            {onAddPreset && presetFormOpen && (
+              <div className="flex gap-1 items-center border-t border-smoke-800 pt-2">
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitPreset()
+                    if (e.key === "Escape") { setPresetFormOpen(false); setPresetName("") }
+                  }}
+                  placeholder="Preset name…"
+                  autoFocus
+                  className="flex-1 bg-smoke-800 border border-smoke-700 text-smoke-200 text-[10px] px-1.5 py-1 rounded focus:border-doom-gold/50 outline-none min-w-0"
+                />
+                <button
+                  type="button"
+                  onClick={submitPreset}
+                  disabled={!presetName.trim()}
+                  className="px-1.5 py-1 text-[10px] bg-doom-gold text-navy-950 rounded hover:bg-doom-gold/80 disabled:opacity-40 transition-colors shrink-0"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPresetFormOpen(false); setPresetName("") }}
+                  className="text-[10px] text-smoke-500 hover:text-smoke-300 transition-colors shrink-0 px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
           </div>
         )}
@@ -345,29 +425,76 @@ interface StyleTabProps {
 }
 
 export default function StyleTab({ vs, onChange, durationPx }: StyleTabProps) {
+  const queryClient = useQueryClient()
   const previewH = Math.max(PX_PER_HOUR * 0.5, Math.min(PX_PER_HOUR * 4, durationPx))
+
+  const { data: palettes = [] } = useQuery<ApiPalette[]>({
+    queryKey: ["palettes"],
+    queryFn: async () => {
+      const res = await fetch("/api/palettes")
+      if (!res.ok) return []
+      return res.json() as Promise<ApiPalette[]>
+    },
+  })
+
+  const personalPresets = palettes
+    .filter((p) => p.type === "personal" && p.colors.length > 0)
+    .map((p) => ({ id: p.id, name: p.name, color: p.colors[0] }))
+
+  async function handleAddPreset(color: string, name: string) {
+    await fetch("/api/palettes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, type: "personal", colors: [color] }),
+    })
+    await queryClient.invalidateQueries({ queryKey: ["palettes"] })
+  }
 
   return (
     <div className="flex flex-col gap-5 py-1">
       <EventPreview vs={vs} previewH={previewH} />
 
       {/* Fill */}
-      <ColorInput label="Fill" value={vs.fillColor} onChange={(v) => onChange({ fillColor: v })} />
+      <ColorInput
+        label="Fill"
+        value={vs.fillColor}
+        onChange={(v) => onChange({ fillColor: v })}
+        personalPresets={personalPresets}
+        onAddPreset={handleAddPreset}
+      />
 
       {/* Frame */}
       <div className="flex flex-col gap-2">
-        <ColorInput label="Frame color" value={vs.frameColor} onChange={(v) => onChange({ frameColor: v })} />
+        <ColorInput
+          label="Frame color"
+          value={vs.frameColor}
+          onChange={(v) => onChange({ frameColor: v })}
+          personalPresets={personalPresets}
+          onAddPreset={handleAddPreset}
+        />
         <WidthSlider label="Frame width" value={vs.frameWidth} onChange={(v) => onChange({ frameWidth: v })} max={8} />
       </div>
 
       {/* Side */}
       <div className="flex flex-col gap-2">
-        <ColorInput label="Side color" value={vs.sideColor} onChange={(v) => onChange({ sideColor: v })} />
+        <ColorInput
+          label="Side color"
+          value={vs.sideColor}
+          onChange={(v) => onChange({ sideColor: v })}
+          personalPresets={personalPresets}
+          onAddPreset={handleAddPreset}
+        />
         <WidthSlider label="Side width" value={vs.sideWidth} onChange={(v) => onChange({ sideWidth: v })} max={12} />
       </div>
 
       {/* Text color */}
-      <ColorInput label="Text color" value={vs.textColor} onChange={(v) => onChange({ textColor: v })} />
+      <ColorInput
+        label="Text color"
+        value={vs.textColor}
+        onChange={(v) => onChange({ textColor: v })}
+        personalPresets={personalPresets}
+        onAddPreset={handleAddPreset}
+      />
 
       {/* Shape — polygon editor */}
       <PolygonEditor
@@ -380,6 +507,8 @@ export default function StyleTab({ vs, onChange, durationPx }: StyleTabProps) {
         onTextPosition={(p) => onChange({ textPosition: p })}
         widthPercent={vs.widthPercent}
         onWidthPercent={(v) => onChange({ widthPercent: v })}
+        leftOffset={vs.leftOffset}
+        onLeftOffset={(v) => onChange({ leftOffset: v })}
       />
 
       {/* Font */}

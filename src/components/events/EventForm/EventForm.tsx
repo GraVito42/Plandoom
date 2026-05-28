@@ -28,6 +28,7 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   shapeSmoothing: 0,
   textPosition: null,
   widthPercent: 100,
+  leftOffset: 0,
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
@@ -50,6 +51,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     shapeSmoothing: typeof r.shapeSmoothing === "number" ? r.shapeSmoothing : 0,
     textPosition: tp && typeof tp.x === "number" && typeof tp.y === "number" ? tp : null,
     widthPercent: typeof r.widthPercent === "number" ? r.widthPercent : 100,
+    leftOffset: typeof r.leftOffset === "number" ? r.leftOffset : 0,
   }
 }
 
