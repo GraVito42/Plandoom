@@ -199,7 +199,7 @@ export default function EventEditor({
           {/* LEFT — Style (~20%) */}
           <div
             className="flex flex-col shrink-0 transition-all duration-200 overflow-hidden"
-            style={{ width: styleOpen ? "20%" : "2rem" }}
+            style={{ width: styleOpen ? "15%" : "2rem" }}
           >
             <div className={`flex items-center shrink-0 border-b border-smoke-700 ${styleOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
               {styleOpen ? (
@@ -352,7 +352,7 @@ export default function EventEditor({
           {/* RIGHT — Folder (~20%) */}
           <div
             className="flex flex-col shrink-0 transition-all duration-200 overflow-hidden"
-            style={{ width: folderOpen ? "20%" : "2rem" }}
+            style={{ width: folderOpen ? "15%" : "2rem" }}
           >
             <div className={`flex items-center shrink-0 border-b border-smoke-700 ${folderOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
               {folderOpen ? (

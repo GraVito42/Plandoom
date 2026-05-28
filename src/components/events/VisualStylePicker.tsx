@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useState, useEffect } from "react"
 import type { VisualStyle } from "@/types"
 
 // ─── Preset palettes ────────────────────────────────────────────────────────
@@ -42,6 +41,26 @@ const FONTS: { label: string; value: string }[] = [
   { label: "Comic", value: "'Comic Sans MS', cursive" },
 ]
 
+// ─── Color preset storage (localStorage) ─────────────────────────────────────
+
+const LS_COLOR_KEY = "plandoom_color_presets"
+const MAX_COLOR_PRESETS = 8
+
+type ColorPreset = { id: string; color: string }
+
+function loadColorPresets(): ColorPreset[] {
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem(LS_COLOR_KEY) : null
+    return raw ? (JSON.parse(raw) as ColorPreset[]) : []
+  } catch {
+    return []
+  }
+}
+
+function persistColorPresets(presets: ColorPreset[]) {
+  localStorage.setItem(LS_COLOR_KEY, JSON.stringify(presets))
+}
+
 // ─── ColorInput ─────────────────────────────────────────────────────────────
 
 interface ColorInputProps {
@@ -51,9 +70,10 @@ interface ColorInputProps {
   presets: string[]
   allowTransparent?: boolean
   onActive?: () => void
+  onSaveColor?: () => void
 }
 
-function ColorInput({ label, value, onChange, presets, allowTransparent, onActive }: ColorInputProps) {
+function ColorInput({ label, value, onChange, presets, allowTransparent, onActive, onSaveColor }: ColorInputProps) {
   const isTransparent = value === "transparent"
 
   function handleHex(raw: string) {
@@ -100,6 +120,17 @@ function ColorInput({ label, value, onChange, presets, allowTransparent, onActiv
               outlineOffset: "1px",
             }}
           />
+        )}
+        {/* Save current color as preset */}
+        {onSaveColor && !isTransparent && (
+          <button
+            type="button"
+            onClick={() => { onActive?.(); onSaveColor() }}
+            title="Save as color preset"
+            className="w-4 h-4 rounded-sm shrink-0 border border-smoke-600 bg-smoke-700 text-smoke-400 hover:text-doom-gold hover:border-smoke-500 text-[9px] leading-none flex items-center justify-center transition-colors font-bold"
+          >
+            +
+          </button>
         )}
       </div>
       <div className="flex items-center gap-1.5">
@@ -167,136 +198,43 @@ function WidthPicker({
   )
 }
 
-// ─── PersonalPresets ──────────────────────────────────────────────────────────
+// ─── SavedColorPresets ────────────────────────────────────────────────────────
 
-type PersonalPalette = {
-  id: string
-  name: string
-  type: string
-  colors: unknown
-}
-
-function PersonalPresets({
-  activeColor,
+function SavedColorPresets({
+  presets,
   onApply,
+  onDelete,
 }: {
-  activeColor: string
+  presets: ColorPreset[]
   onApply: (color: string) => void
+  onDelete: (id: string) => void
 }) {
-  const qc = useQueryClient()
-  const [saving, setSaving] = useState(false)
-  const [saveName, setSaveName] = useState("")
-  const [deleting, setDeleting] = useState<string | null>(null)
-
-  const { data: palettes = [] } = useQuery<PersonalPalette[]>({
-    queryKey: ["personal-presets"],
-    queryFn: async () => {
-      const res = await fetch("/api/palettes")
-      if (!res.ok) return []
-      const all = (await res.json()) as PersonalPalette[]
-      return all.filter((p) => p.type === "personal")
-    },
-  })
-
-  async function savePreset() {
-    const name = saveName.trim()
-    if (!name || activeColor === "transparent") return
-    await fetch("/api/palettes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type: "personal", colors: [activeColor] }),
-    })
-    await qc.invalidateQueries({ queryKey: ["personal-presets"] })
-    setSaveName("")
-    setSaving(false)
-  }
-
-  async function deletePreset(id: string) {
-    setDeleting(id)
-    await fetch(`/api/palettes/${id}`, { method: "DELETE" })
-    await qc.invalidateQueries({ queryKey: ["personal-presets"] })
-    setDeleting(null)
-  }
-
-  const canSave = activeColor !== "transparent"
+  if (presets.length === 0) return null
 
   return (
     <div className="pt-3 border-t border-smoke-700/50">
-      <p className="text-[10px] text-smoke-400 uppercase tracking-wider mb-1.5">My presets</p>
-
-      {palettes.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap mb-2">
-          {palettes.map((p) => {
-            const color = Array.isArray(p.colors) ? (p.colors as string[])[0] ?? "" : ""
-            if (!color) return null
-            return (
-              <div key={p.id} className="relative group shrink-0">
-                <button
-                  type="button"
-                  title={p.name}
-                  onClick={() => onApply(color)}
-                  className="w-6 h-6 rounded-full border border-smoke-600 block transition-transform hover:scale-110"
-                  style={{ backgroundColor: color }}
-                />
-                <button
-                  type="button"
-                  onClick={() => deletePreset(p.id)}
-                  disabled={deleting === p.id}
-                  className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-doom-ember text-white text-[8px] leading-none items-center justify-center hidden group-hover:flex disabled:opacity-50"
-                  title="Delete preset"
-                >
-                  ✕
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {saving ? (
-        <div className="flex items-center gap-1">
-          <input
-            autoFocus
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { void savePreset() }
-              if (e.key === "Escape") { setSaving(false) }
-            }}
-            placeholder="Name..."
-            className="flex-1 min-w-0 bg-smoke-800 border border-smoke-600 rounded px-1.5 py-0.5 text-[10px] text-smoke-100 focus:outline-none focus:border-doom-gold"
-          />
-          <button
-            type="button"
-            onClick={() => void savePreset()}
-            disabled={!saveName.trim()}
-            className="px-1.5 py-0.5 text-[10px] bg-doom-gold text-navy-950 rounded font-medium disabled:opacity-40"
-          >
-            ✓
-          </button>
-          <button
-            type="button"
-            onClick={() => setSaving(false)}
-            className="px-1.5 py-0.5 text-[10px] text-smoke-500 hover:text-smoke-200"
-          >
-            ✕
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setSaving(true)}
-          disabled={!canSave}
-          className="flex items-center gap-1 text-[10px] text-smoke-500 hover:text-doom-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          title={canSave ? "Save current color as personal preset" : "Cannot save transparent"}
-        >
-          <span
-            className="inline-block w-3 h-3 rounded-full border border-smoke-600 shrink-0"
-            style={{ backgroundColor: activeColor === "transparent" ? "#23262a" : activeColor }}
-          />
-          + Save color
-        </button>
-      )}
+      <p className="text-[10px] text-smoke-400 uppercase tracking-wider mb-1.5">Saved</p>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {presets.map((p) => (
+          <div key={p.id} className="relative group shrink-0">
+            <button
+              type="button"
+              title={p.color}
+              onClick={() => onApply(p.color)}
+              className="w-5 h-5 rounded-full border border-smoke-600 block transition-transform hover:scale-110"
+              style={{ backgroundColor: p.color }}
+            />
+            <button
+              type="button"
+              onClick={() => onDelete(p.id)}
+              className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-doom-ember text-white text-[7px] leading-none items-center justify-center hidden group-hover:flex"
+              title="Remove preset"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -312,9 +250,25 @@ interface Props {
 
 export default function VisualStylePicker({ value, onChange }: Props) {
   const [activeField, setActiveField] = useState<ActiveColorField>("fillColor")
+  const [savedPresets, setSavedPresets] = useState<ColorPreset[]>([])
+
+  useEffect(() => { setSavedPresets(loadColorPresets()) }, [])
 
   function set<K extends keyof VisualStyle>(key: K, val: VisualStyle[K]) {
     onChange({ ...value, [key]: val })
+  }
+
+  function addPreset(color: string) {
+    if (!color || color === "transparent") return
+    const updated = [...savedPresets, { id: Date.now().toString(), color }].slice(-MAX_COLOR_PRESETS)
+    setSavedPresets(updated)
+    persistColorPresets(updated)
+  }
+
+  function removePreset(id: string) {
+    const updated = savedPresets.filter((p) => p.id !== id)
+    setSavedPresets(updated)
+    persistColorPresets(updated)
   }
 
   function applyPreset(color: string) {
@@ -330,6 +284,7 @@ export default function VisualStylePicker({ value, onChange }: Props) {
         onChange={(v) => set("fillColor", v)}
         presets={FILL_PRESETS}
         onActive={() => setActiveField("fillColor")}
+        onSaveColor={() => addPreset(value.fillColor)}
       />
 
       {/* Frame (cornice) */}
@@ -342,6 +297,7 @@ export default function VisualStylePicker({ value, onChange }: Props) {
             presets={FRAME_PRESETS}
             allowTransparent
             onActive={() => setActiveField("frameColor")}
+            onSaveColor={() => addPreset(value.frameColor)}
           />
         </div>
         <WidthPicker
@@ -363,6 +319,7 @@ export default function VisualStylePicker({ value, onChange }: Props) {
             presets={SIDE_PRESETS}
             allowTransparent
             onActive={() => setActiveField("sideColor")}
+            onSaveColor={() => addPreset(value.sideColor)}
           />
         </div>
         <WidthPicker
@@ -381,6 +338,7 @@ export default function VisualStylePicker({ value, onChange }: Props) {
         onChange={(v) => set("textColor", v)}
         presets={TEXT_PRESETS}
         onActive={() => setActiveField("textColor")}
+        onSaveColor={() => addPreset(value.textColor)}
       />
 
       {/* Shape */}
@@ -437,10 +395,11 @@ export default function VisualStylePicker({ value, onChange }: Props) {
         <span className="text-xs text-smoke-300">Show checkbox</span>
       </label>
 
-      {/* Personal color presets */}
-      <PersonalPresets
-        activeColor={value[activeField] as string}
+      {/* Saved color presets */}
+      <SavedColorPresets
+        presets={savedPresets}
         onApply={applyPreset}
+        onDelete={removePreset}
       />
     </div>
   )
