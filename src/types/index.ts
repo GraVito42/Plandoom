@@ -10,6 +10,8 @@ export type VisualStyle = {
   hasCheckbox: boolean
   isChecked: boolean
   eventType: string
+  widthPercent: number   // 50-100: right-edge of block as % of the day column
+  leftOffset: number     // 0-50: left-edge of block as % of the day column
 }
 
 export type QualitativeTiming = "morning" | "midday" | "afternoon" | "evening" | "night"

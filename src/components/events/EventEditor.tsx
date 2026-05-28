@@ -57,6 +57,8 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   hasCheckbox: false,
   isChecked: false,
   eventType: "default",
+  widthPercent: 100,
+  leftOffset: 0,
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
@@ -76,6 +78,8 @@ function parseVisualStyle(raw: unknown): VisualStyle {
       hasCheckbox: typeof r.hasCheckbox === "boolean" ? r.hasCheckbox : false,
       isChecked: typeof r.isChecked === "boolean" ? r.isChecked : false,
       eventType: typeof r.eventType === "string" ? r.eventType : "default",
+      widthPercent: typeof r.widthPercent === "number" ? Math.max(50, Math.min(100, r.widthPercent)) : 100,
+      leftOffset: typeof r.leftOffset === "number" ? Math.max(0, Math.min(50, r.leftOffset)) : 0,
     }
   }
   return DEFAULT_VISUAL_STYLE
@@ -291,14 +295,16 @@ export default function EventEditor({
                 ▶
               </span>
               Style
-              {/* Live preview mini-block */}
-              <span
-                className="ml-1 inline-flex items-center gap-0.5"
-                style={{ fontFamily: visualStyle.fontFamily !== "inherit" ? visualStyle.fontFamily : undefined }}
-              >
+              {/* Live preview mini-block — reflects widthPercent and leftOffset */}
+              <span className="ml-1 inline-block relative w-10 h-3.5 shrink-0">
                 <span
-                  className="inline-block w-10 h-3.5 text-[7px] leading-none flex items-center justify-center overflow-hidden"
-                  style={previewBorderStyle(visualStyle)}
+                  className="absolute top-0 h-full text-[7px] leading-none flex items-center justify-center overflow-hidden"
+                  style={{
+                    ...previewBorderStyle(visualStyle),
+                    left: `${visualStyle.leftOffset}%`,
+                    width: `${visualStyle.widthPercent - visualStyle.leftOffset}%`,
+                    fontFamily: visualStyle.fontFamily !== "inherit" ? visualStyle.fontFamily : undefined,
+                  }}
                 >
                   Aa
                 </span>

@@ -31,6 +31,8 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     hasCheckbox: false,
     isChecked: false,
     eventType: "default",
+    widthPercent: 100,
+    leftOffset: 0,
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaults
   const r = raw as Record<string, unknown>
@@ -48,6 +50,8 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     hasCheckbox: typeof r.hasCheckbox === "boolean" ? r.hasCheckbox : defaults.hasCheckbox,
     isChecked: typeof r.isChecked === "boolean" ? r.isChecked : defaults.isChecked,
     eventType: typeof r.eventType === "string" ? r.eventType : defaults.eventType,
+    widthPercent: typeof r.widthPercent === "number" ? Math.max(50, Math.min(100, r.widthPercent)) : defaults.widthPercent,
+    leftOffset: typeof r.leftOffset === "number" ? Math.max(0, Math.min(50, r.leftOffset)) : defaults.leftOffset,
   }
 }
 
@@ -82,6 +86,8 @@ export default function EventBlock({
   const height = Math.max(24, baseHeight + resizeDeltaMinutes * (PX_PER_HOUR / 60))
 
   const vs = parseVisualStyle(event.visualStyle)
+  const leftOffsetPct = vs.leftOffset
+  const widthPct = vs.widthPercent
   const radius = shapeRadius(vs.shape)
 
   const hasFrame = vs.frameWidth > 0 && vs.frameColor !== "transparent"
@@ -123,8 +129,14 @@ export default function EventBlock({
     <div
       ref={setNodeRef}
       {...attributes}
-      className="absolute left-0.5 right-0.5 z-20"
-      style={{ top, height, opacity: isDragging ? 0.25 : 1 }}
+      className="absolute z-20"
+      style={{
+        top,
+        height,
+        left: `calc(${leftOffsetPct}% + 2px)`,
+        width: `calc(${widthPct - leftOffsetPct}% - 4px)`,
+        opacity: isDragging ? 0.25 : 1,
+      }}
     >
       {/* Event body: frame border + fill + draggable */}
       <div

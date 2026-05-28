@@ -22,6 +22,8 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   hasCheckbox: false,
   isChecked: false,
   eventType: "default",
+  widthPercent: 100,
+  leftOffset: 0,
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
@@ -39,6 +41,8 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     hasCheckbox: (r.hasCheckbox as boolean) ?? false,
     isChecked: (r.isChecked as boolean) ?? false,
     eventType: (r.eventType as string) ?? "default",
+    widthPercent: typeof r.widthPercent === "number" ? Math.max(50, Math.min(100, r.widthPercent)) : 100,
+    leftOffset: typeof r.leftOffset === "number" ? Math.max(0, Math.min(50, r.leftOffset)) : 0,
   }
 }
 
