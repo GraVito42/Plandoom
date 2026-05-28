@@ -10,6 +10,7 @@ import FolderTab from "./tabs/FolderTab"
 import LindoPanel from "./panels/LindoPanel"
 import SeendoPanel from "./panels/SeendoPanel"
 import ProDoPanel from "./panels/ProDoPanel"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 const DEFAULT_VISUAL_STYLE: VisualStyle = {
   shape: "rounded",
@@ -260,6 +261,8 @@ export default function EventForm({
   const [deleting, setDeleting] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [folderStylePending, setFolderStylePending] = useState<VisualStyle | null>(null)
+  const [styleOpen, setStyleOpen] = useState(true)
+  const [folderOpen, setFolderOpen] = useState(true)
 
   // Track the last folderId to distinguish first selection vs folder change
   const prevFolderIdRef = useRef<string>(eventToEdit?.folderId ?? "")
@@ -473,59 +476,127 @@ export default function EventForm({
           </button>
         </div>
 
-        {/* Column labels */}
-        <div className="grid grid-cols-3 shrink-0 border-b border-smoke-700">
-          <div className="px-4 py-1.5 border-r border-smoke-700">
-            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Style</span>
-          </div>
-          <div className="px-4 py-1.5 border-r border-smoke-700">
-            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">
-              {CENTER_LABELS[centerView]}
-            </span>
-          </div>
-          <div className="px-4 py-1.5">
-            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Folder Features</span>
-          </div>
-        </div>
+        {/* Three columns — proportional widths, collapsible sides */}
+        <div className="flex flex-1 min-h-0 divide-x divide-smoke-700 overflow-hidden">
 
-        {/* Three columns — each scrolls independently */}
-        <div className="grid grid-cols-3 flex-1 min-h-0 divide-x divide-smoke-700 overflow-hidden">
-
-          {/* Left — Style always visible */}
-          <div className="overflow-y-auto px-4 py-3">
-            <StyleTab vs={draft.visualStyle} onChange={patchVS} durationPx={durationPx} />
+          {/* Left — Style (collapsible, 20% when open) */}
+          <div
+            className="flex flex-col shrink-0 overflow-hidden transition-all duration-200"
+            style={{ width: styleOpen ? "20%" : "2rem" }}
+          >
+            <div className={`flex items-center shrink-0 border-b border-smoke-700 ${styleOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
+              {styleOpen ? (
+                <>
+                  <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Style</span>
+                  <button
+                    type="button"
+                    onClick={() => setStyleOpen(false)}
+                    className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setStyleOpen(true)}
+                  className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                >
+                  <ChevronRight size={12} />
+                </button>
+              )}
+            </div>
+            {styleOpen ? (
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <StyleTab vs={draft.visualStyle} onChange={patchVS} durationPx={durationPx} />
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <span
+                  className="text-[10px] uppercase tracking-widest text-smoke-600 whitespace-nowrap select-none"
+                  style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+                >
+                  Style
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Center — Content or active Golem panel */}
-          <div className="overflow-y-auto px-4 py-3">
-            {centerView === "content" && (
-              <ContentTab
-                draft={draft}
-                onChange={patchContent}
-                onFolderChange={handleFolderChange}
-              />
-            )}
-            {centerView === "lindo" && (
-              <LindoPanel
-                isExternalLinked={draft.isExternalLinked}
-                onChange={(v) => patch({ isExternalLinked: v })}
-              />
-            )}
-            {centerView === "seendo" && (
-              <SeendoPanel seendoImages={seendoImages} eventId={eventToEdit?.id ?? null} />
-            )}
-            {centerView === "prodo" && (
-              <ProDoPanel draft={draft} onChange={patch} />
-            )}
+          {/* Center — Content or active Golem panel (takes remaining space) */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <div className="px-4 py-1.5 border-b border-smoke-700 shrink-0">
+              <span className="text-[10px] text-smoke-500 uppercase tracking-widest">
+                {CENTER_LABELS[centerView]}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              {centerView === "content" && (
+                <ContentTab
+                  draft={draft}
+                  onChange={patchContent}
+                  onFolderChange={handleFolderChange}
+                />
+              )}
+              {centerView === "lindo" && (
+                <LindoPanel
+                  isExternalLinked={draft.isExternalLinked}
+                  onChange={(v) => patch({ isExternalLinked: v })}
+                />
+              )}
+              {centerView === "seendo" && (
+                <SeendoPanel seendoImages={seendoImages} eventId={eventToEdit?.id ?? null} />
+              )}
+              {centerView === "prodo" && (
+                <ProDoPanel draft={draft} onChange={patch} />
+              )}
+            </div>
           </div>
 
-          {/* Right — Folder Features always visible */}
-          <div className="overflow-y-auto px-4 py-3">
-            <FolderTab
-              folderId={draft.folderId}
-              folderFieldValues={draft.folderFieldValues}
-              onFieldValueChange={setFieldValue}
-            />
+          {/* Right — Folder Features (collapsible, 30% when open) */}
+          <div
+            className="flex flex-col shrink-0 overflow-hidden transition-all duration-200"
+            style={{ width: folderOpen ? "30%" : "2rem" }}
+          >
+            <div className={`flex items-center shrink-0 border-b border-smoke-700 ${folderOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
+              {folderOpen ? (
+                <>
+                  <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Folder Features</span>
+                  <button
+                    type="button"
+                    onClick={() => setFolderOpen(false)}
+                    className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setFolderOpen(true)}
+                  className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                >
+                  <ChevronLeft size={12} />
+                </button>
+              )}
+            </div>
+            {folderOpen ? (
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <FolderTab
+                  folderId={draft.folderId}
+                  folderFieldValues={draft.folderFieldValues}
+                  onFieldValueChange={setFieldValue}
+                />
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <span
+                  className="text-[10px] uppercase tracking-widest text-smoke-600 whitespace-nowrap select-none"
+                  style={{ writingMode: "vertical-rl" }}
+                >
+                  Folder
+                </span>
+              </div>
+            )}
           </div>
 
         </div>
