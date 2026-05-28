@@ -36,6 +36,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     shapeSmoothing: 0,
     textPosition: null,
     widthPercent: 100,
+    leftOffset: 0,
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaults
   const r = raw as Record<string, unknown>
@@ -58,6 +59,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     shapeSmoothing: typeof r.shapeSmoothing === "number" ? r.shapeSmoothing : 0,
     textPosition: tp && typeof tp.x === "number" && typeof tp.y === "number" ? tp : null,
     widthPercent: typeof r.widthPercent === "number" ? r.widthPercent : 100,
+    leftOffset: typeof r.leftOffset === "number" ? r.leftOffset : 0,
   }
 }
 
@@ -114,6 +116,7 @@ export default function EventBlock({
   const showTime = height >= (showLocation ? 50 : 34)
 
   const widthPct = vs.widthPercent ?? 100
+  const leftOffsetPct = vs.leftOffset ?? 0
   const textPos = hasCustomShape ? vs.textPosition : null
 
   async function handleCheckboxToggle(e: React.MouseEvent) {
@@ -135,8 +138,8 @@ export default function EventBlock({
       style={{
         top,
         height,
-        left: 2,
-        width: `calc(${widthPct}% - 4px)`,
+        left: `calc(${leftOffsetPct}% + 2px)`,
+        width: `calc(${widthPct - leftOffsetPct}% - 4px)`,
         opacity: isDragging ? 0.25 : 1,
       }}
     >

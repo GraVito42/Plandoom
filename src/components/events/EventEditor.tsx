@@ -62,6 +62,7 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   shapeSmoothing: 0,
   textPosition: null,
   widthPercent: 100,
+  leftOffset: 0,
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
@@ -86,6 +87,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
       shapeSmoothing: typeof r.shapeSmoothing === "number" ? r.shapeSmoothing : 0,
       textPosition: tp && typeof tp.x === "number" && typeof tp.y === "number" ? tp : null,
       widthPercent: typeof r.widthPercent === "number" ? r.widthPercent : 100,
+      leftOffset: typeof r.leftOffset === "number" ? r.leftOffset : 0,
     }
   }
   return DEFAULT_VISUAL_STYLE
@@ -178,7 +180,7 @@ export default function EventEditor({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-navy-950/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-3xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="relative z-10 w-full max-w-4xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-smoke-700 shrink-0">
@@ -201,28 +203,20 @@ export default function EventEditor({
             className="flex flex-col shrink-0 transition-all duration-200 overflow-hidden"
             style={{ width: styleOpen ? "15%" : "2rem" }}
           >
-            <div className={`flex items-center shrink-0 border-b border-smoke-700 ${styleOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
+            <button
+              type="button"
+              onClick={() => setStyleOpen((o) => !o)}
+              className={`flex items-center shrink-0 border-b border-smoke-700 w-full hover:bg-smoke-800 transition-colors ${styleOpen ? "justify-between px-3 py-2" : "justify-center py-2"}`}
+            >
               {styleOpen ? (
                 <>
-                  <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Style</span>
-                  <button
-                    type="button"
-                    onClick={() => setStyleOpen(false)}
-                    className="text-smoke-600 hover:text-smoke-300 transition-colors"
-                  >
-                    <ChevronLeft size={12} />
-                  </button>
+                  <span className="text-[10px] text-smoke-400 uppercase tracking-widest select-none">Style</span>
+                  <ChevronLeft size={14} className="text-smoke-400 shrink-0" />
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setStyleOpen(true)}
-                  className="text-smoke-600 hover:text-smoke-300 transition-colors"
-                >
-                  <ChevronRight size={12} />
-                </button>
+                <ChevronRight size={14} className="text-smoke-400" />
               )}
-            </div>
+            </button>
             {styleOpen ? (
               <div className="flex-1 overflow-y-auto px-3 py-3">
                 <div className="mb-3">
@@ -354,28 +348,20 @@ export default function EventEditor({
             className="flex flex-col shrink-0 transition-all duration-200 overflow-hidden"
             style={{ width: folderOpen ? "15%" : "2rem" }}
           >
-            <div className={`flex items-center shrink-0 border-b border-smoke-700 ${folderOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
+            <button
+              type="button"
+              onClick={() => setFolderOpen((o) => !o)}
+              className={`flex items-center shrink-0 border-b border-smoke-700 w-full hover:bg-smoke-800 transition-colors ${folderOpen ? "justify-between px-3 py-2" : "justify-center py-2"}`}
+            >
               {folderOpen ? (
                 <>
-                  <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Folder</span>
-                  <button
-                    type="button"
-                    onClick={() => setFolderOpen(false)}
-                    className="text-smoke-600 hover:text-smoke-300 transition-colors"
-                  >
-                    <ChevronRight size={12} />
-                  </button>
+                  <span className="text-[10px] text-smoke-400 uppercase tracking-widest select-none">Folder</span>
+                  <ChevronRight size={14} className="text-smoke-400 shrink-0" />
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setFolderOpen(true)}
-                  className="text-smoke-600 hover:text-smoke-300 transition-colors"
-                >
-                  <ChevronLeft size={12} />
-                </button>
+                <ChevronLeft size={14} className="text-smoke-400" />
               )}
-            </div>
+            </button>
             {folderOpen ? (
               <div className="flex-1 overflow-y-auto px-3 py-3">
                 <p className="text-[10px] text-smoke-600 italic">No folder selected.</p>

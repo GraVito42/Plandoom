@@ -380,6 +380,8 @@ export default function StyleTab({ vs, onChange, durationPx }: StyleTabProps) {
         onTextPosition={(p) => onChange({ textPosition: p })}
         widthPercent={vs.widthPercent}
         onWidthPercent={(v) => onChange({ widthPercent: v })}
+        leftOffset={vs.leftOffset}
+        onLeftOffset={(v) => onChange({ leftOffset: v })}
       />
 
       {/* Font */}

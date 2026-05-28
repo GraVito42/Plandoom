@@ -34,6 +34,7 @@ const DEFAULT_FOLDER_STYLE: VisualStyle = {
   shapeSmoothing: 0,
   textPosition: null,
   widthPercent: 100,
+  leftOffset: 0,
 }
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
