@@ -236,7 +236,7 @@ export default function EventBlock({
               </p>
             </div>
             {showLocation && (
-              <p className="text-[10px] truncate leading-tight opacity-75 mt-0.5">📍 {event.location}</p>
+              <p className="text-xs text-smoke-400 truncate leading-tight mt-0.5">📍 {event.location}</p>
             )}
             {showTime && (
               <p className="text-[10px] truncate leading-tight opacity-60 mt-0.5">
@@ -282,7 +282,7 @@ export default function EventBlock({
               </p>
             </div>
             {showLocation && (
-              <p className="text-[10px] truncate leading-tight opacity-75 mt-0.5">📍 {event.location}</p>
+              <p className="text-xs text-smoke-400 truncate leading-tight mt-0.5">📍 {event.location}</p>
             )}
             {showTime && (
               <p className="text-[10px] truncate leading-tight opacity-60 mt-0.5">
