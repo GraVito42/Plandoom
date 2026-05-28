@@ -8,6 +8,10 @@ const globalForPrisma = globalThis as unknown as {
 
 function createPrismaClient() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  // Prevent unhandled 'error' events from crashing the process
+  pool.on("error", (err) => {
+    console.error("[db] pool error:", err)
+  })
   const adapter = new PrismaPg(pool)
   return new PrismaClient({
     adapter,

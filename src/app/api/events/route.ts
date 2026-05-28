@@ -133,8 +133,10 @@ export async function GET(request: Request) {
 // ── POST ──────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
+  console.log("[POST /api/events] HANDLER ENTRY")
   try {
     const user = await ensureUser()
+    console.log("[POST /api/events] user authed")
     const body: unknown = await request.json()
     const data = createEventSchema.parse(body)
 
@@ -166,9 +168,9 @@ export async function POST(request: Request) {
         new Date(data.endTime),
         data.repetition,
       )
+      console.log("[POST /api/events] occurrences generated:", occurrences.length)
 
       if (occurrences.length === 0) {
-        // no valid occurrences — create single event without repetition
         const event = await db.event.create({
           data: { ...sharedData, startTime: new Date(data.startTime), endTime: new Date(data.endTime) },
         })
@@ -177,7 +179,7 @@ export async function POST(request: Request) {
 
       const [first, ...rest] = occurrences
 
-      // Parent = first occurrence, carries the repetition config
+      console.log("[POST /api/events] creating parent event...")
       const parent = await db.event.create({
         data: {
           ...sharedData,
@@ -186,19 +188,24 @@ export async function POST(request: Request) {
           repetition: data.repetition as unknown as Prisma.InputJsonValue,
         },
       })
+      console.log("[POST /api/events] parent created:", parent.id)
 
-      // Child occurrences
       if (rest.length > 0) {
-        await db.event.createMany({
-          data: rest.map((occ) => ({
-            ...sharedData,
-            startTime: occ.startTime,
-            endTime: occ.endTime,
-            parentEventId: parent.id,
-          })),
-        })
+        console.log("[POST /api/events] creating", rest.length, "children...")
+        for (const occ of rest) {
+          await db.event.create({
+            data: {
+              ...sharedData,
+              startTime: occ.startTime,
+              endTime: occ.endTime,
+              parentEventId: parent.id,
+            },
+          })
+        }
+        console.log("[POST /api/events] children created OK")
       }
 
+      console.log("[POST /api/events] returning 201 success")
       return NextResponse.json({ id: parent.id, count: occurrences.length }, { status: 201 })
     }
 
@@ -215,7 +222,7 @@ export async function POST(request: Request) {
     if (err instanceof Error && err.message === "Non autenticato") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    console.error("[POST /api/events]", err)
+    console.error("[POST /api/events] CAUGHT ERROR:", err)
     return NextResponse.json({ error: "Internal server error", detail: String(err) }, { status: 500 })
   }
 }

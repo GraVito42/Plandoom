@@ -264,11 +264,10 @@ export default function EventForm({
   // Track the last folderId to distinguish first selection vs folder change
   const prevFolderIdRef = useRef<string>(eventToEdit?.folderId ?? "")
 
-  // An event is "recurring" if it belongs to a series
-  const isRecurring = !!eventToEdit && (
-    eventToEdit.parentEventId !== null ||
-    eventToEdit.repetition !== null
-  )
+  // An event is "recurring" only if it's a child occurrence (has parentEventId)
+  const isRecurring = !!eventToEdit &&
+    eventToEdit.parentEventId !== null &&
+    eventToEdit.parentEventId !== undefined
 
   function patch(partial: Partial<EventDraft>) {
     setDraft((prev) => ({ ...prev, ...partial }))

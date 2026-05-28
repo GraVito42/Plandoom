@@ -122,14 +122,15 @@ export async function PUT(request: Request, { params }: RouteParams) {
         data: sharedPatch,
       })
 
-      // Apply timing changes (if any) only to this specific event
-      const timingPatch = {
-        ...(data.startTime !== undefined && { startTime: new Date(data.startTime) }),
-        ...(data.endTime !== undefined && { endTime: new Date(data.endTime) }),
-      }
+      // Apply timing changes to this specific event (always includes startTime/endTime)
       const updated = await db.event.update({
         where: { id },
-        data: timingPatch,
+        data: {
+          ...(data.startTime !== undefined && { startTime: new Date(data.startTime) }),
+          ...(data.endTime !== undefined && { endTime: new Date(data.endTime) }),
+          // Ensure at least one field is present (sharedPatch already applied via updateMany)
+          updatedAt: new Date(),
+        },
       })
 
       return NextResponse.json(updated)
