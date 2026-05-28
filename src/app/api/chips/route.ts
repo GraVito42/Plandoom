@@ -4,6 +4,17 @@ import { Prisma } from "@prisma/client"
 import { ensureUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 
+function getISOWeek(date: Date): { week: number; year: number } {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const day = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return {
+    week: Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7),
+    year: d.getUTCFullYear(),
+  }
+}
+
 const visualStyleSchema = z.object({
   shape: z.enum(["rectangle", "rounded", "pill"]),
   frameColor: z.string(),
@@ -53,17 +64,38 @@ export async function GET(request: Request) {
     const weekStart = searchParams.get("weekStart")
     const weekEnd = searchParams.get("weekEnd")
 
-    const chips = await db.chip.findMany({
-      where: {
+    let whereClause: Prisma.ChipWhereInput = { userId: user.id }
+
+    if (area === "pouch") {
+      const { week: currentWeek, year: currentYear } = getISOWeek(new Date())
+      whereClause = {
         userId: user.id,
-        ...(area ? { area } : {}),
+        OR: [
+          { area: "pouch" },
+          {
+            area: { in: ["weekly", "daily"] },
+            OR: [
+              { year: { lt: currentYear } },
+              { year: currentYear, weekNumber: { lt: currentWeek } },
+            ],
+          },
+        ],
+      }
+    } else if (area) {
+      whereClause = {
+        userId: user.id,
+        area,
         ...(area === "daily" && weekStart && weekEnd
           ? { dayTarget: { gte: new Date(weekStart), lt: new Date(weekEnd) } }
           : {}),
         ...(area === "weekly" && weekStart && weekEnd
           ? { createdAt: { gte: new Date(weekStart), lt: new Date(weekEnd) } }
           : {}),
-      },
+      }
+    }
+
+    const chips = await db.chip.findMany({
+      where: whereClause,
       orderBy: { createdAt: "asc" },
     })
 

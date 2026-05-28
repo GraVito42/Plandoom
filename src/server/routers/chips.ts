@@ -1,6 +1,11 @@
 // Server-side chip operation types — ready for tRPC wiring when needed.
 // Currently these operations are handled by REST routes in src/app/api/chips/.
 
+// Returned by GET /api/chips?area=pouch — includes past-week chips (area=weekly|daily)
+export type PouchChipsQuery = {
+  area: "pouch"
+}
+
 export type ChipMoveInput = {
   chipId: string
   area: "daily" | "weekly" | "pouch"

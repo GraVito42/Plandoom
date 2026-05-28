@@ -19,6 +19,29 @@ export default function Pouch({ onClose, onSchedule }: PouchProps) {
     },
   })
 
+  const pouchChips = chips.filter((c) => c.area === "pouch")
+  const pastWeekChips = chips.filter((c) => c.area !== "pouch")
+
+  // Group past-week chips by "year-WW" key, sorted descending (most recent first)
+  const pastWeekGroups: Array<{ key: string; label: string; chips: ApiChip[] }> = []
+  const groupMap = new Map<string, ApiChip[]>()
+  for (const chip of pastWeekChips) {
+    const year = chip.year ?? 0
+    const week = chip.weekNumber ?? 0
+    const key = `${year}-${String(week).padStart(2, "0")}`
+    if (!groupMap.has(key)) groupMap.set(key, [])
+    groupMap.get(key)!.push(chip)
+  }
+  const sortedKeys = Array.from(groupMap.keys()).sort((a, b) => b.localeCompare(a))
+  for (const key of sortedKeys) {
+    const [yearStr, weekStr] = key.split("-")
+    pastWeekGroups.push({
+      key,
+      label: `W${parseInt(weekStr, 10)} · ${yearStr}`,
+      chips: groupMap.get(key)!,
+    })
+  }
+
   return (
     <div className="absolute top-0 right-0 bottom-0 w-56 z-30 flex flex-col bg-smoke-900 border-l border-smoke-700 shadow-2xl">
       {/* Header */}
@@ -35,16 +58,51 @@ export default function Pouch({ onClose, onSchedule }: PouchProps) {
       </div>
 
       {/* Chip list */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {chips.length === 0 ? (
-          <p className="text-xs text-smoke-600 italic">No chips in the pouch.</p>
-        ) : null}
-        <ChipArea
-          area="pouch"
-          chips={chips}
-          draggable
-          onSchedule={onSchedule}
-        />
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-4">
+
+        {/* Current pouch section */}
+        <div>
+          {pouchChips.length === 0 && pastWeekGroups.length === 0 && (
+            <p className="text-xs text-smoke-600 italic">No chips in the pouch.</p>
+          )}
+          <ChipArea
+            area="pouch"
+            chips={pouchChips}
+            draggable
+            onSchedule={onSchedule}
+          />
+        </div>
+
+        {/* Past weeks section */}
+        {pastWeekGroups.length > 0 && (
+          <>
+            {/* Divider */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex-1 h-px bg-smoke-700" />
+              <span className="text-[9px] text-smoke-600 uppercase tracking-widest shrink-0">Settimane passate</span>
+              <div className="flex-1 h-px bg-smoke-700" />
+            </div>
+
+            {pastWeekGroups.map((group) => (
+              <div key={group.key} className="flex flex-col gap-1.5">
+                {/* Week badge */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-mono font-semibold text-doom-gold/70 bg-doom-gold/10 border border-doom-gold/20 rounded px-1.5 py-0.5 leading-none">
+                    {group.label}
+                  </span>
+                  <div className="flex-1 h-px bg-smoke-800" />
+                </div>
+
+                <ChipArea
+                  area="pouch"
+                  chips={group.chips}
+                  draggable
+                  onSchedule={onSchedule}
+                />
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   )
