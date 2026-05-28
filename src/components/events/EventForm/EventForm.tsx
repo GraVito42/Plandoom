@@ -9,6 +9,7 @@ import FolderTab from "./tabs/FolderTab"
 import LindoPanel from "./panels/LindoPanel"
 import SeendoPanel from "./panels/SeendoPanel"
 import ProDoPanel from "./panels/ProDoPanel"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 const DEFAULT_VISUAL_STYLE: VisualStyle = {
   shape: "rounded",
@@ -50,7 +51,6 @@ function toLocalTime(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
 }
 
-type MainTab = "style" | "content" | "folder"
 type BottomTab = "lindo" | "seendo" | "prodo"
 
 type EventDraft = ContentDraft & {
@@ -158,7 +158,8 @@ export default function EventForm({
   const [draft, setDraft] = useState<EventDraft>(() =>
     initDraft(eventToEdit, date, startHour, prefillTitle, prefillDescription)
   )
-  const [mainTab, setMainTab] = useState<MainTab>("content")
+  const [styleOpen, setStyleOpen] = useState(true)
+  const [folderOpen, setFolderOpen] = useState(true)
   const [bottomTab, setBottomTab] = useState<BottomTab | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -243,12 +244,6 @@ export default function EventForm({
     }
   }
 
-  const MAIN_TABS: { id: MainTab; label: string }[] = [
-    { id: "style", label: "Style" },
-    { id: "content", label: "Content" },
-    { id: "folder", label: "Folder" },
-  ]
-
   const BOTTOM_TABS: { id: BottomTab; label: string }[] = [
     { id: "lindo", label: "Lindo" },
     { id: "seendo", label: "Seendo" },
@@ -263,7 +258,7 @@ export default function EventForm({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-navy-950/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="relative z-10 w-full max-w-4xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-smoke-700 shrink-0">
@@ -278,39 +273,109 @@ export default function EventForm({
           </button>
         </div>
 
-        {/* Main tab bar */}
-        <div className="flex border-b border-smoke-700 shrink-0">
-          {MAIN_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setMainTab(t.id)}
-              className={`flex-1 py-2.5 text-xs font-medium tracking-wide transition-colors border-b-2 ${
-                mainTab === t.id
-                  ? "text-doom-gold border-doom-gold"
-                  : "text-smoke-500 border-transparent hover:text-smoke-300"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {/* Three columns: Style (30%) | Content (flex-1) | Folder (20%) */}
+        <div className="flex flex-1 min-h-0 divide-x divide-smoke-700 overflow-hidden">
 
-        {/* Main tab content */}
-        <div className="flex-1 overflow-y-auto px-5 py-3 min-h-0">
-          {mainTab === "style" && (
-            <StyleTab vs={draft.visualStyle} onChange={patchVS} />
-          )}
-          {mainTab === "content" && (
-            <ContentTab draft={draft} onChange={patchContent} />
-          )}
-          {mainTab === "folder" && (
-            <FolderTab
-              folderId={draft.folderId}
-              folderFieldValues={draft.folderFieldValues}
-              onFieldValueChange={setFieldValue}
-            />
-          )}
+          {/* Left — Style (30% open, w-8 collapsed) */}
+          <div
+            className="flex flex-col shrink-0 overflow-hidden transition-all duration-200"
+            style={{ width: styleOpen ? "30%" : "2rem" }}
+          >
+            <div className={`flex items-center shrink-0 border-b border-smoke-700 ${styleOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
+              {styleOpen ? (
+                <>
+                  <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Style</span>
+                  <button
+                    type="button"
+                    onClick={() => setStyleOpen(false)}
+                    className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setStyleOpen(true)}
+                  className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                >
+                  <ChevronRight size={12} />
+                </button>
+              )}
+            </div>
+            {styleOpen ? (
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <StyleTab vs={draft.visualStyle} onChange={patchVS} />
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <span
+                  className="text-[10px] uppercase tracking-widest text-smoke-600 whitespace-nowrap select-none"
+                  style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+                >
+                  Style
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Center — Content (takes remaining space, never changes width) */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <div className="px-4 py-1.5 border-b border-smoke-700 shrink-0">
+              <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Content</span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              <ContentTab draft={draft} onChange={patchContent} />
+            </div>
+          </div>
+
+          {/* Right — Folder (20% open, w-8 collapsed) */}
+          <div
+            className="flex flex-col shrink-0 overflow-hidden transition-all duration-200"
+            style={{ width: folderOpen ? "20%" : "2rem" }}
+          >
+            <div className={`flex items-center shrink-0 border-b border-smoke-700 ${folderOpen ? "justify-between px-3 py-1.5" : "justify-center py-1.5"}`}>
+              {folderOpen ? (
+                <>
+                  <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Folder</span>
+                  <button
+                    type="button"
+                    onClick={() => setFolderOpen(false)}
+                    className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setFolderOpen(true)}
+                  className="text-smoke-600 hover:text-smoke-300 transition-colors"
+                >
+                  <ChevronLeft size={12} />
+                </button>
+              )}
+            </div>
+            {folderOpen ? (
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <FolderTab
+                  folderId={draft.folderId}
+                  folderFieldValues={draft.folderFieldValues}
+                  onFieldValueChange={setFieldValue}
+                />
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <span
+                  className="text-[10px] uppercase tracking-widest text-smoke-600 whitespace-nowrap select-none"
+                  style={{ writingMode: "vertical-rl" }}
+                >
+                  Folder
+                </span>
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* Golem bottom bar */}
