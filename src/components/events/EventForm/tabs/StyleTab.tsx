@@ -2,16 +2,198 @@
 
 import { useState, useRef, useEffect } from "react"
 import type React from "react"
-import type { VisualStyle } from "@/types"
+import {
+  Briefcase, Star, Heart, Flame, Zap, BookOpen, Tag, Flag,
+  Home, Music, Camera, Coffee, Leaf, Globe, Shield, Bell,
+} from "lucide-react"
+import type { VisualStyle, FolderSymbol } from "@/types"
 import PolygonEditor from "./PolygonEditor"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
+
+// ── Folder symbol icon registry ───────────────────────────────────────────────
+
+const SYMBOL_ICONS = {
+  Briefcase, Star, Heart, Flame, Zap, BookOpen, Tag, Flag,
+  Home, Music, Camera, Coffee, Leaf, Globe, Shield, Bell,
+} as const
+
+type SymbolIconName = keyof typeof SYMBOL_ICONS
+const ICON_NAMES = Object.keys(SYMBOL_ICONS) as SymbolIconName[]
+
+
+// ── FolderSymbolSection ───────────────────────────────────────────────────────
+
+function FolderSymbolSection({
+  folderSymbol,
+  onFolderSymbol,
+}: {
+  folderSymbol: FolderSymbol | null
+  onFolderSymbol: (sym: FolderSymbol | null) => void
+}) {
+  const sym = folderSymbol
+
+  function patch(partial: Partial<FolderSymbol>) {
+    onFolderSymbol({
+      icon: sym?.icon ?? "Star",
+      customImage: sym?.customImage ?? null,
+      color: sym?.color ?? "#c9a84c",
+      size: sym?.size ?? 24,
+      position: sym?.position ?? null,
+      ...partial,
+    })
+  }
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      patch({ icon: null, customImage: reader.result as string })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5 border border-smoke-700 rounded-lg p-3 bg-smoke-900/40">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Folder Symbol</span>
+        {sym && (
+          <button
+            type="button"
+            onClick={() => onFolderSymbol(null)}
+            className="text-[10px] text-smoke-500 hover:text-doom-ember transition-colors"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Icon grid */}
+      <div className="grid grid-cols-8 gap-1">
+        {ICON_NAMES.map((name) => {
+          const Icon = SYMBOL_ICONS[name]
+          const active = sym?.icon === name && !sym.customImage
+          return (
+            <button
+              key={name}
+              type="button"
+              title={name}
+              onClick={() => patch({ icon: name, customImage: null })}
+              className={`flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                active
+                  ? "bg-doom-gold/20 border border-doom-gold/60 text-doom-gold"
+                  : "bg-smoke-800 border border-smoke-700 text-smoke-400 hover:text-smoke-200 hover:border-smoke-500"
+              }`}
+            >
+              <Icon size={11} />
+            </button>
+          )
+        })}
+      </div>
+
+      {/* PNG upload */}
+      <div className="flex items-center gap-2">
+        <label className="flex-1 flex items-center gap-2 cursor-pointer">
+          <span className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+            sym?.customImage
+              ? "border-doom-gold/60 text-doom-gold bg-doom-gold/10"
+              : "border-smoke-700 text-smoke-500 hover:text-smoke-300 hover:border-smoke-500"
+          }`}>
+            {sym?.customImage ? "PNG loaded" : "Upload PNG"}
+          </span>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+        </label>
+        {sym?.customImage && (
+          <button
+            type="button"
+            onClick={() => patch({ customImage: null, icon: "Star" })}
+            className="text-[10px] text-smoke-500 hover:text-doom-ember transition-colors"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {sym && (
+        <>
+          {/* Color */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-smoke-500 w-8 shrink-0">Color</span>
+            <input
+              type="color"
+              value={sym.color}
+              onChange={(e) => patch({ color: e.target.value })}
+              className="w-6 h-5 rounded border border-smoke-700 cursor-pointer bg-transparent p-0.5 shrink-0"
+            />
+            <input
+              value={sym.color}
+              onChange={(e) => patch({ color: e.target.value })}
+              className="flex-1 min-w-0 bg-smoke-800 border border-smoke-700 text-smoke-200 text-[10px] font-mono rounded px-1.5 py-1 focus:outline-none focus:border-smoke-500"
+            />
+          </div>
+
+          {/* Size */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-smoke-500 w-8 shrink-0">Size</span>
+            <input
+              type="range"
+              min={12}
+              max={96}
+              step={2}
+              value={sym.size}
+              onChange={(e) => patch({ size: Number(e.target.value) })}
+              className="flex-1 accent-doom-gold"
+            />
+            <span className="text-[10px] text-smoke-400 w-8 text-right shrink-0 tabular-nums">{sym.size}px</span>
+          </div>
+
+          <p className="text-[10px] text-smoke-600">
+            Position: use the canvas below — click "Place symbol" to add the ◈ handle and drag it.
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
 
 const COLOR_PRESETS = [
   "#162d5e", "#0f2044", "#1e3a78", "#2a4d96",
   "#c9a84c", "#8b3a2a", "#4a2d6b", "#1a1c1e",
   "#d1d5db", "#6b7280", "transparent",
 ]
+
+const PRESET_STORAGE_KEY = "plandoom_color_presets"
+const MAX_PRESETS = 20
+const PRESET_DEFAULTS = [
+  "#162d5e", "#0f2044", "#1e3a78", "#2a4d96", "#4a2d6b",
+  "#23262a", "#2e3236", "#484e55", "#3d1a12", "#8b3a2a",
+  "#3d2e0e", "#c9a84c", "#d4b483", "#9ca3af", "#d1d5db",
+  "#f3f4f6", "#ffffff",
+]
+
+function loadPresets(): string[] {
+  if (typeof window === "undefined") return [...PRESET_DEFAULTS]
+  const raw = localStorage.getItem(PRESET_STORAGE_KEY)
+  if (!raw) {
+    localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(PRESET_DEFAULTS))
+    return [...PRESET_DEFAULTS]
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (Array.isArray(parsed)) return parsed as string[]
+  } catch { /* ignore */ }
+  return [...PRESET_DEFAULTS]
+}
+
+function savePresets(presets: string[]) {
+  localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets))
+}
 
 const FONTS = [
   { label: "Default", value: "inherit" },
@@ -35,10 +217,12 @@ function ColorInput({
   value,
   onChange,
   label,
+  onActive,
 }: {
   value: string
   onChange: (v: string) => void
   label: string
+  onActive?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [hex, setHex] = useState(value)
@@ -68,7 +252,7 @@ function ColorInput({
         {/* Trigger — shows current color */}
         <button
           type="button"
-          onClick={() => setOpen((p) => !p)}
+          onClick={() => { setOpen((p) => !p); onActive?.() }}
           className="w-full h-7 rounded border border-smoke-700 hover:border-smoke-500 transition-colors overflow-hidden"
           title={value}
         >
@@ -144,6 +328,97 @@ function ColorInput({
   )
 }
 
+// ── ColourPresetsPanel ────────────────────────────────────────────────────────
+
+interface ColourPresetsPanelProps {
+  activeColor: string
+  onApply: (color: string) => void
+}
+
+function ColourPresetsPanel({ activeColor, onApply }: ColourPresetsPanelProps) {
+  const [presets, setPresets] = useState<string[]>(() => loadPresets())
+
+  function addPreset() {
+    if (!activeColor || activeColor === "transparent") return
+    setPresets((prev) => {
+      if (prev.includes(activeColor)) return prev
+      const next = prev.length >= MAX_PRESETS ? [...prev.slice(1), activeColor] : [...prev, activeColor]
+      savePresets(next)
+      return next
+    })
+  }
+
+  function deletePreset(idx: number) {
+    setPresets((prev) => {
+      const next = prev.filter((_, i) => i !== idx)
+      savePresets(next)
+      return next
+    })
+  }
+
+  function resetDefaults() {
+    const d = [...PRESET_DEFAULTS]
+    savePresets(d)
+    setPresets(d)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Presets</span>
+        <button
+          type="button"
+          onClick={addPreset}
+          disabled={
+            !activeColor ||
+            activeColor === "transparent" ||
+            presets.includes(activeColor) ||
+            presets.length >= MAX_PRESETS
+          }
+          title="Save active colour as preset"
+          className="text-sm text-doom-gold hover:text-doom-gold/80 disabled:opacity-30 transition-colors leading-none px-1"
+        >
+          +
+        </button>
+      </div>
+      {presets.length === 0 ? (
+        <button
+          type="button"
+          onClick={resetDefaults}
+          className="self-start text-[10px] text-smoke-500 hover:text-smoke-300 border border-smoke-700 hover:border-smoke-500 rounded px-2 py-1 transition-colors"
+        >
+          Reset default colours
+        </button>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((c, i) => (
+            <div key={i} className="relative group">
+              <button
+                type="button"
+                onClick={() => onApply(c)}
+                title={c}
+                className="w-5 h-5 rounded hover:scale-110 transition-transform overflow-hidden"
+                style={{
+                  background: c,
+                  outline: activeColor === c ? "2px solid #c9a84c" : "1px solid #3a3f45",
+                  outlineOffset: activeColor === c ? "2px" : "0",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => deletePreset(i)}
+                className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-smoke-700 text-smoke-400 hover:bg-doom-ember hover:text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[8px] leading-none"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function WidthSlider({
   value,
   onChange,
@@ -214,7 +489,7 @@ function WidthSlider({
 
 // ── EventPreview ─────────────────────────────────────────────────────────────
 
-function EventPreview({ vs, previewH }: { vs: VisualStyle; previewH: number }) {
+function EventPreview({ vs, previewH, folderSymbol }: { vs: VisualStyle; previewH: number; folderSymbol?: FolderSymbol | null }) {
   const fw = vs.frameWidth > 0 && vs.frameColor !== "transparent" ? vs.frameWidth : 0
   const fc = fw > 0 ? vs.frameColor : "transparent"
   const hasFrame = fw > 0
@@ -285,6 +560,32 @@ function EventPreview({ vs, previewH }: { vs: VisualStyle; previewH: number }) {
           />
         )}
 
+        {/* Folder symbol overlay */}
+        {folderSymbol && (() => {
+          const pos = folderSymbol.position ?? { x: 0.85, y: 0.1 }
+          const iconSize = folderSymbol.size
+          const IconComp = folderSymbol.icon ? SYMBOL_ICONS[folderSymbol.icon as SymbolIconName] : null
+          return (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: `${pos.x * 100}%`,
+                top: `${pos.y * 100}%`,
+                transform: "translate(-50%, -50%)",
+                zIndex: 10,
+                lineHeight: 0,
+              }}
+            >
+              {folderSymbol.customImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={folderSymbol.customImage} alt="" style={{ width: iconSize, height: iconSize, objectFit: "contain" }} />
+              ) : IconComp ? (
+                <IconComp size={iconSize} color={folderSymbol.color} />
+              ) : null}
+            </div>
+          )
+        })()}
+
         {/* Text */}
         {textPos ? (
           <div
@@ -342,32 +643,74 @@ interface StyleTabProps {
   vs: VisualStyle
   onChange: (patch: Partial<VisualStyle>) => void
   durationPx: number
+  // Optional: only passed when editing a folder's default style
+  folderSymbol?: FolderSymbol | null
+  onFolderSymbol?: (sym: FolderSymbol | null) => void
 }
 
-export default function StyleTab({ vs, onChange, durationPx }: StyleTabProps) {
+type ActiveColorField = "fillColor" | "frameColor" | "sideColor" | "textColor"
+
+export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFolderSymbol }: StyleTabProps) {
   const previewH = Math.max(PX_PER_HOUR * 0.5, Math.min(PX_PER_HOUR * 4, durationPx))
+  const [activeField, setActiveField] = useState<ActiveColorField>("fillColor")
+  const activeColor = vs[activeField]
+
+  function applyPreset(color: string) {
+    onChange({ [activeField]: color } as Partial<VisualStyle>)
+  }
 
   return (
     <div className="flex flex-col gap-5 py-1">
-      <EventPreview vs={vs} previewH={previewH} />
+      <EventPreview vs={vs} previewH={previewH} folderSymbol={folderSymbol} />
+
+      {/* Colour presets */}
+      <ColourPresetsPanel activeColor={activeColor} onApply={applyPreset} />
+
+      {/* Folder symbol — only in folder style context */}
+      {onFolderSymbol !== undefined && (
+        <FolderSymbolSection
+          folderSymbol={folderSymbol ?? null}
+          onFolderSymbol={onFolderSymbol}
+        />
+      )}
 
       {/* Fill */}
-      <ColorInput label="Fill" value={vs.fillColor} onChange={(v) => onChange({ fillColor: v })} />
+      <ColorInput
+        label="Fill"
+        value={vs.fillColor}
+        onChange={(v) => onChange({ fillColor: v })}
+        onActive={() => setActiveField("fillColor")}
+      />
 
       {/* Frame */}
       <div className="flex flex-col gap-2">
-        <ColorInput label="Frame color" value={vs.frameColor} onChange={(v) => onChange({ frameColor: v })} />
+        <ColorInput
+          label="Frame color"
+          value={vs.frameColor}
+          onChange={(v) => onChange({ frameColor: v })}
+          onActive={() => setActiveField("frameColor")}
+        />
         <WidthSlider label="Frame width" value={vs.frameWidth} onChange={(v) => onChange({ frameWidth: v })} max={8} />
       </div>
 
       {/* Side */}
       <div className="flex flex-col gap-2">
-        <ColorInput label="Side color" value={vs.sideColor} onChange={(v) => onChange({ sideColor: v })} />
+        <ColorInput
+          label="Side color"
+          value={vs.sideColor}
+          onChange={(v) => onChange({ sideColor: v })}
+          onActive={() => setActiveField("sideColor")}
+        />
         <WidthSlider label="Side width" value={vs.sideWidth} onChange={(v) => onChange({ sideWidth: v })} max={12} />
       </div>
 
       {/* Text color */}
-      <ColorInput label="Text color" value={vs.textColor} onChange={(v) => onChange({ textColor: v })} />
+      <ColorInput
+        label="Text color"
+        value={vs.textColor}
+        onChange={(v) => onChange({ textColor: v })}
+        onActive={() => setActiveField("textColor")}
+      />
 
       {/* Shape — polygon editor */}
       <PolygonEditor
@@ -382,6 +725,16 @@ export default function StyleTab({ vs, onChange, durationPx }: StyleTabProps) {
         onWidthPercent={(v) => onChange({ widthPercent: v })}
         leftOffset={vs.leftOffset}
         onLeftOffset={(v) => onChange({ leftOffset: v })}
+        folderSymbolPosition={onFolderSymbol ? (folderSymbol?.position ?? null) : undefined}
+        onFolderSymbolPosition={onFolderSymbol
+          ? (pos) => onFolderSymbol(
+              folderSymbol
+                ? { ...folderSymbol, position: pos }
+                : { icon: "Star", customImage: null, color: "#c9a84c", size: 24, position: pos }
+            )
+          : undefined}
+        folderSymbolIcon={folderSymbol?.icon ?? null}
+        folderSymbolImage={folderSymbol?.customImage ?? null}
       />
 
       {/* Font */}

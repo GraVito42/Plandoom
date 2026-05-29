@@ -13,6 +13,7 @@ interface DayColumnProps {
   isToday: boolean
   resizingEventId: string | null
   resizeDeltaMinutes: number
+  folderMap?: Record<string, { visualStyle: unknown }>
   onSlotClick: (hour: number) => void
   onEventClick: (ev: ApiEvent) => void
   onResizeStart: (eventId: string, clientY: number) => void
@@ -27,6 +28,7 @@ export default function DayColumn({
   isToday,
   resizingEventId,
   resizeDeltaMinutes,
+  folderMap,
   onSlotClick,
   onEventClick,
   onResizeStart,
@@ -69,6 +71,7 @@ export default function DayColumn({
         <EventBlock
           key={ev.id}
           event={ev}
+          folderVisualStyle={folderMap?.[ev.folderId ?? ""]?.visualStyle}
           resizeDeltaMinutes={resizingEventId === ev.id ? resizeDeltaMinutes : 0}
           onClick={() => onEventClick(ev)}
           onResizeStart={(clientY) => onResizeStart(ev.id, clientY)}

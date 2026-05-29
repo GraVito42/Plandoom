@@ -2,12 +2,31 @@
 
 import { useQueryClient } from "@tanstack/react-query"
 import { useDraggable } from "@dnd-kit/core"
+import {
+  Briefcase, Star, Heart, Flame, Zap, BookOpen, Tag, Flag,
+  Home, Music, Camera, Coffee, Leaf, Globe, Shield, Bell,
+} from "lucide-react"
 import { HOUR_START, PX_PER_HOUR } from "@/hooks/useGrid"
-import type { ApiEvent, VisualStyle } from "@/types"
+import type { ApiEvent, VisualStyle, FolderSymbol } from "@/types"
 import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
+
+const SYMBOL_ICONS = {
+  Briefcase, Star, Heart, Flame, Zap, BookOpen, Tag, Flag,
+  Home, Music, Camera, Coffee, Leaf, Globe, Shield, Bell,
+} as const
+
+type SymbolIconName = keyof typeof SYMBOL_ICONS
+
+function resolveSymbolSize(size: unknown): number {
+  if (typeof size === "number") return size
+  if (size === "sm") return 16
+  if (size === "lg") return 40
+  return 24
+}
 
 interface EventBlockProps {
   event: ApiEvent
+  folderVisualStyle?: unknown
   resizeDeltaMinutes: number
   onClick: () => void
   onResizeStart: (clientY: number) => void
@@ -63,6 +82,28 @@ function parseVisualStyle(raw: unknown): VisualStyle {
   }
 }
 
+function parseFolderSymbol(vs: unknown): FolderSymbol | null {
+  if (!vs || typeof vs !== "object" || Array.isArray(vs)) return null
+  const r = vs as Record<string, unknown>
+  const fs = r.folderSymbol
+  if (!fs || typeof fs !== "object" || Array.isArray(fs)) return null
+  const f = fs as Record<string, unknown>
+  if (typeof f.color !== "string") return null
+  const pos = f.position
+  return {
+    icon: typeof f.icon === "string" ? f.icon : null,
+    customImage: typeof f.customImage === "string" ? f.customImage : null,
+    color: f.color,
+    size: resolveSymbolSize(f.size),
+    position:
+      pos && typeof pos === "object" && !Array.isArray(pos) &&
+      typeof (pos as Record<string, unknown>).x === "number" &&
+      typeof (pos as Record<string, unknown>).y === "number"
+        ? { x: (pos as Record<string, unknown>).x as number, y: (pos as Record<string, unknown>).y as number }
+        : null,
+  }
+}
+
 function shapeRadius(shape: VisualStyle["shape"]): string {
   if (shape === "pill") return "9999px"
   if (shape === "rounded") return "4px"
@@ -71,6 +112,7 @@ function shapeRadius(shape: VisualStyle["shape"]): string {
 
 export default function EventBlock({
   event,
+  folderVisualStyle,
   resizeDeltaMinutes,
   onClick,
   onResizeStart,
@@ -103,7 +145,6 @@ export default function EventBlock({
   const fw = hasFrame ? vs.frameWidth : 0
   const fc = hasFrame ? vs.frameColor : "transparent"
 
-  // CSS frame — only used for standard (non-custom-shape) blocks
   const frameStyle: React.CSSProperties = hasCustomShape ? {} : {
     borderTopWidth: fw, borderTopStyle: hasFrame ? "solid" : "none", borderTopColor: fc,
     borderRightWidth: fw, borderRightStyle: hasFrame ? "solid" : "none", borderRightColor: fc,
@@ -111,13 +152,15 @@ export default function EventBlock({
     borderLeftWidth: fw, borderLeftStyle: hasFrame ? "solid" : "none", borderLeftColor: fc,
   }
 
-  // Height thresholds for secondary info rows
   const showLocation = !!event.location && height >= 34
   const showTime = height >= (showLocation ? 50 : 34)
 
   const widthPct = vs.widthPercent ?? 100
   const leftOffsetPct = vs.leftOffset ?? 0
   const textPos = hasCustomShape ? vs.textPosition : null
+
+  // Folder symbol from parent folder's visualStyle
+  const folderSym = parseFolderSymbol(folderVisualStyle)
 
   async function handleCheckboxToggle(e: React.MouseEvent) {
     e.stopPropagation()
@@ -183,7 +226,7 @@ export default function EventBlock({
           />
         )}
 
-        {/* Map pin — opens locationUrl in new tab, stops drag/click propagation */}
+        {/* Map pin */}
         {event.locationUrl && (
           <a
             href={event.locationUrl}
@@ -198,6 +241,38 @@ export default function EventBlock({
             📍
           </a>
         )}
+
+        {/* Folder symbol overlay */}
+        {folderSym && (() => {
+          const pos = folderSym.position ?? { x: 0.85, y: 0.1 }
+          const iconSize = folderSym.size
+          return (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: `${pos.x * 100}%`,
+                top: `${pos.y * 100}%`,
+                transform: "translate(-50%, -50%)",
+                zIndex: 10,
+                lineHeight: 0,
+              }}
+            >
+              {folderSym.customImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={folderSym.customImage}
+                  alt=""
+                  style={{ width: iconSize, height: iconSize, objectFit: "contain" }}
+                />
+              ) : folderSym.icon && SYMBOL_ICONS[folderSym.icon as SymbolIconName] ? (
+                (() => {
+                  const IconComp = SYMBOL_ICONS[folderSym.icon as SymbolIconName]
+                  return <IconComp size={iconSize} color={folderSym.color} />
+                })()
+              ) : null}
+            </div>
+          )
+        })()}
 
         {/* Text at absolute position (custom shapes with textPosition) */}
         {textPos ? (
@@ -245,7 +320,6 @@ export default function EventBlock({
             )}
           </div>
         ) : (
-          /* Standard padding layout */
           <div
             className="h-full overflow-hidden"
             style={{
@@ -293,7 +367,7 @@ export default function EventBlock({
         )}
       </div>
 
-      {/* SVG frame stroke for custom shapes — sibling of body, outside clip, renders on top */}
+      {/* SVG frame stroke for custom shapes */}
       {hasCustomShape && hasFrame && (
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { DragOverlay } from "@dnd-kit/core"
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/hooks/useGrid"
 import { useChips } from "@/hooks/useChips"
 import { useDragDrop } from "@/hooks/useDragDrop"
-import type { ApiEvent, ApiChip } from "@/types"
+import type { ApiEvent, ApiChip, ApiFolder } from "@/types"
 import DayColumn from "./DayColumn"
 import EventForm from "../events/EventForm/EventForm"
 import ChipArea from "../chips/ChipArea"
@@ -88,6 +88,20 @@ export default function WeekGrid() {
       return res.json() as Promise<ApiEvent[]>
     },
   })
+
+  const { data: folders = [] } = useQuery<ApiFolder[]>({
+    queryKey: ["folders"],
+    queryFn: async () => {
+      const res = await fetch("/api/folders")
+      if (!res.ok) throw new Error("Failed to load folders")
+      return res.json() as Promise<ApiFolder[]>
+    },
+  })
+
+  const folderMap = useMemo(
+    () => Object.fromEntries(folders.map((f) => [f.id, f])),
+    [folders]
+  )
 
   const { chipsForDay } = useChips(weekStart, weekEnd)
   const { activeEvent, activeChip, activeDims } = useDragDrop(events)
@@ -293,6 +307,7 @@ export default function WeekGrid() {
                 isToday={isToday(date)}
                 resizingEventId={resizing?.eventId ?? null}
                 resizeDeltaMinutes={resizing?.deltaMinutes ?? 0}
+                folderMap={folderMap}
                 onSlotClick={(hour) => openCreate(date, hour)}
                 onEventClick={openEdit}
                 onResizeStart={handleResizeStart}

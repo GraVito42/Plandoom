@@ -133,8 +133,8 @@ export default function EventEditor({
   const [visualStyle, setVisualStyle] = useState<VisualStyle>(
     parseVisualStyle(eventToEdit?.visualStyle)
   )
-  const [styleOpen, setStyleOpen] = useState(true)
-  const [folderOpen, setFolderOpen] = useState(true)
+  const [styleOpen, setStyleOpen] = useState(false)
+  const [folderOpen, setFolderOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {

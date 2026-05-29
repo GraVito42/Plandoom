@@ -93,6 +93,7 @@ interface ChipAreaProps {
   weekNumber?: number
   year?: number
   onSchedule?: (chip: ApiChip) => void
+  hideAddButton?: boolean
 }
 
 export default function ChipArea({
@@ -103,6 +104,7 @@ export default function ChipArea({
   weekNumber,
   year,
   onSchedule,
+  hideAddButton = false,
 }: ChipAreaProps) {
   const queryClient = useQueryClient()
   const [chipFormOpen, setChipFormOpen] = useState(false)
@@ -177,12 +179,14 @@ export default function ChipArea({
         ))}
       </div>
 
-      <button
-        onClick={() => setChipFormOpen(true)}
-        className="self-start text-[10px] text-smoke-600 hover:text-smoke-400 transition-colors mt-0.5"
-      >
-        + Add chip
-      </button>
+      {!hideAddButton && (
+        <button
+          onClick={() => setChipFormOpen(true)}
+          className="self-start text-[10px] text-smoke-600 hover:text-smoke-400 transition-colors mt-0.5"
+        >
+          + Add chip
+        </button>
+      )}
 
       {chipFormOpen && (
         <ChipForm

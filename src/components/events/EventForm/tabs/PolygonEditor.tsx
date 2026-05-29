@@ -107,6 +107,11 @@ interface PolygonEditorProps {
   onWidthPercent: (v: number) => void
   leftOffset: number
   onLeftOffset: (v: number) => void
+  // Optional: folder symbol position handle
+  folderSymbolPosition?: { x: number; y: number } | null
+  onFolderSymbolPosition?: (pos: { x: number; y: number } | null) => void
+  folderSymbolIcon?: string | null
+  folderSymbolImage?: string | null
 }
 
 export default function PolygonEditor({
@@ -121,6 +126,10 @@ export default function PolygonEditor({
   onWidthPercent,
   leftOffset,
   onLeftOffset,
+  folderSymbolPosition,
+  onFolderSymbolPosition,
+  folderSymbolIcon,
+  folderSymbolImage,
 }: PolygonEditorProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [svgW, setSvgW] = useState(220)
@@ -151,6 +160,7 @@ export default function PolygonEditor({
   const widthCleanupRef = useRef<(() => void) | null>(null)
   const leftCleanupRef = useRef<(() => void) | null>(null)
   const textCleanupRef = useRef<(() => void) | null>(null)
+  const symbolCleanupRef = useRef<(() => void) | null>(null)
   useEffect(() => { pointsRef.current = points }, [points])
   useEffect(() => { closedRef.current = closed }, [closed])
   useEffect(() => () => {
@@ -158,6 +168,7 @@ export default function PolygonEditor({
     widthCleanupRef.current?.()
     leftCleanupRef.current?.()
     textCleanupRef.current?.()
+    symbolCleanupRef.current?.()
   }, [])
 
   // ── Preset helpers ────────────────────────────────────────────────────────────
@@ -313,6 +324,30 @@ export default function PolygonEditor({
       window.removeEventListener("pointercancel", onUp)
     }
     textCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", onUp)
+  }
+
+  // ── Drag folder symbol position ───────────────────────────────────────────────
+
+  function startSymbolDrag(e: React.PointerEvent) {
+    if (!onFolderSymbolPosition) return
+    const onSymbolPos = onFolderSymbolPosition
+    e.stopPropagation()
+    function onMove(ev: PointerEvent) { onSymbolPos(toNorm(ev.clientX, ev.clientY)) }
+    function onUp(ev: PointerEvent) {
+      onSymbolPos(toNorm(ev.clientX, ev.clientY))
+      symbolCleanupRef.current = null
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    symbolCleanupRef.current = () => {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       window.removeEventListener("pointercancel", onUp)
@@ -494,6 +529,27 @@ export default function PolygonEditor({
             </g>
           )}
 
+          {/* Folder symbol position handle — draggable "◈" badge */}
+          {onFolderSymbolPosition && folderSymbolPosition && (
+            <g
+              transform={`translate(${folderSymbolPosition.x * svgW},${folderSymbolPosition.y * clampedH})`}
+              style={{ cursor: "move", touchAction: "none" }}
+              onPointerDown={startSymbolDrag}
+            >
+              <circle r={12} fill="rgba(0,0,0,0.45)" stroke="#c9a84c" strokeWidth={1} />
+              <text
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="#c9a84c"
+                fontSize={folderSymbolIcon ? 9 : 11}
+                fontWeight="600"
+                pointerEvents="none"
+              >
+                {folderSymbolImage ? "🖼" : (folderSymbolIcon ? folderSymbolIcon.slice(0, 2) : "◈")}
+              </text>
+            </g>
+          )}
+
           {/* Polygon handles */}
           {points.map((p, i) => {
             const { cx, cy } = px(p)
@@ -584,6 +640,24 @@ export default function PolygonEditor({
             className="px-2.5 py-1 text-xs text-smoke-500 hover:text-smoke-300 transition-colors"
           >
             Remove text handle
+          </button>
+        )}
+        {onFolderSymbolPosition && !folderSymbolPosition && (
+          <button
+            type="button"
+            onClick={() => onFolderSymbolPosition({ x: 0.85, y: 0.1 })}
+            className="px-2.5 py-1 text-xs bg-smoke-800 border border-doom-gold/30 text-doom-gold/70 rounded hover:text-doom-gold hover:border-doom-gold/60 transition-colors"
+          >
+            Place symbol
+          </button>
+        )}
+        {onFolderSymbolPosition && folderSymbolPosition && (
+          <button
+            type="button"
+            onClick={() => onFolderSymbolPosition(null)}
+            className="px-2.5 py-1 text-xs text-doom-gold/50 hover:text-doom-gold/80 transition-colors"
+          >
+            Remove symbol handle
           </button>
         )}
         {points.length === 0 && (

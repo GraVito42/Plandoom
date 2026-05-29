@@ -44,14 +44,40 @@ const createChipSchema = z.object({
 // GET /api/chips
 // ?area=daily&weekStart=ISO&weekEnd=ISO
 // ?area=weekly&weekStart=ISO&weekEnd=ISO
-// ?area=pouch
+// ?view=pouch&weekStart=ISO&weekNumber=N&year=Y  — past unscheduled chips (daily before weekStart, weekly before current week)
 export async function GET(request: Request) {
   try {
     const user = await ensureUser()
     const { searchParams } = new URL(request.url)
+    const view = searchParams.get("view")
     const area = searchParams.get("area") as "daily" | "weekly" | "pouch" | null
     const weekStart = searchParams.get("weekStart")
     const weekEnd = searchParams.get("weekEnd")
+
+    // Pouch: past daily chips (dayTarget < currentWeekStart) + past weekly chips (week < currentWeek)
+    if (view === "pouch") {
+      const weekStartParam = searchParams.get("weekStart")
+      const weekNumberParam = searchParams.get("weekNumber")
+      const yearParam = searchParams.get("year")
+      if (!weekStartParam || !weekNumberParam || !yearParam) {
+        return NextResponse.json({ error: "Missing params" }, { status: 400 })
+      }
+      const currentWeekNumber = parseInt(weekNumberParam, 10)
+      const currentYear = parseInt(yearParam, 10)
+
+      const chips = await db.chip.findMany({
+        where: {
+          userId: user.id,
+          OR: [
+            { area: "daily", dayTarget: { lt: new Date(weekStartParam) } },
+            { area: "weekly", year: { lt: currentYear } },
+            { area: "weekly", year: currentYear, weekNumber: { lt: currentWeekNumber } },
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      })
+      return NextResponse.json(chips)
+    }
 
     const chips = await db.chip.findMany({
       where: {

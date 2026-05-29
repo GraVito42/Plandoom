@@ -1,3 +1,11 @@
+export type FolderSymbol = {
+  icon: string | null          // lucide icon name; null when using customImage
+  customImage?: string | null  // base64 data URL of uploaded PNG
+  color: string
+  size: number  // px value, 12–96
+  position: { x: number; y: number } | null  // normalized [0,1]; null = default center
+}
+
 export type VisualStyle = {
   shape: "rectangle" | "rounded" | "pill"
   frameColor: string
@@ -47,6 +55,7 @@ export type ApiFolder = {
   color: string | null
   icon: string | null
   createdAt: string
+  _count?: { events: number }
 }
 
 export type EventSource = "plandoom" | "google" | "notion"

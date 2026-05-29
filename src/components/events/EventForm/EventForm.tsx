@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { ApiEvent, VisualStyle, RepetitionConfig } from "@/types"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import StyleTab from "./tabs/StyleTab"
@@ -83,6 +84,7 @@ function initDraft(
   startHour: number | null,
   prefillTitle?: string,
   prefillDescription?: string,
+  prefillFolderId?: string,
 ): EventDraft {
   if (event) {
     const s = new Date(event.startTime)
@@ -133,7 +135,7 @@ function initDraft(
     location: "",
     locationUrl: "",
     repetition: null,
-    folderId: "",
+    folderId: prefillFolderId ?? "",
     visualStyle: DEFAULT_VISUAL_STYLE,
     isExternalLinked: false,
     mentalEnergy: 50,
@@ -152,6 +154,7 @@ interface EventFormProps {
   eventToEdit: ApiEvent | null
   prefillTitle?: string
   prefillDescription?: string
+  prefillFolderId?: string
   onSave: () => Promise<void>
   onDelete: (id: string) => Promise<void>
   onClose: () => void
@@ -250,21 +253,24 @@ export default function EventForm({
   eventToEdit,
   prefillTitle,
   prefillDescription,
+  prefillFolderId,
   onSave,
   onDelete,
   onClose,
 }: EventFormProps) {
   const [draft, setDraft] = useState<EventDraft>(() =>
-    initDraft(eventToEdit, date, startHour, prefillTitle, prefillDescription)
+    initDraft(eventToEdit, date, startHour, prefillTitle, prefillDescription, prefillFolderId)
   )
   const [centerView, setCenterView] = useState<CenterView>("content")
+  const [styleOpen, setStyleOpen] = useState(false)
+  const [folderOpen, setFolderOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [folderStylePending, setFolderStylePending] = useState<VisualStyle | null>(null)
 
   // Track the last folderId to distinguish first selection vs folder change
-  const prevFolderIdRef = useRef<string>(eventToEdit?.folderId ?? "")
+  const prevFolderIdRef = useRef<string>(eventToEdit?.folderId ?? prefillFolderId ?? "")
 
   // An event is "recurring" only if it's a child occurrence (has parentEventId)
   const isRecurring = !!eventToEdit &&
@@ -438,7 +444,7 @@ export default function EventForm({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-navy-950/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-4xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[88vh]">
+      <div className="relative z-10 w-full max-w-5xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[88vh]">
 
         {/* Scope dialog overlay */}
         {pendingAction && (
@@ -476,26 +482,46 @@ export default function EventForm({
         </div>
 
         {/* Column labels */}
-        <div className="grid grid-cols-3 shrink-0 border-b border-smoke-700">
-          <div className="px-4 py-1.5 border-r border-smoke-700">
-            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Style</span>
+        <div
+          className="grid shrink-0 border-b border-smoke-700"
+          style={{ gridTemplateColumns: `${styleOpen ? "220px" : "32px"} 1fr ${folderOpen ? "220px" : "32px"}` }}
+        >
+          <div className="px-2 py-1.5 border-r border-smoke-700 flex items-center justify-between gap-1">
+            {styleOpen && <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Style</span>}
+            <button
+              type="button"
+              onClick={() => setStyleOpen((p) => !p)}
+              className="text-smoke-500 hover:text-smoke-200 transition-colors ml-auto shrink-0"
+            >
+              {styleOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+            </button>
           </div>
           <div className="px-4 py-1.5 border-r border-smoke-700">
             <span className="text-[10px] text-smoke-500 uppercase tracking-widest">
               {CENTER_LABELS[centerView]}
             </span>
           </div>
-          <div className="px-4 py-1.5">
-            <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Folder Features</span>
+          <div className="px-2 py-1.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFolderOpen((p) => !p)}
+              className="text-smoke-500 hover:text-smoke-200 transition-colors shrink-0"
+            >
+              {folderOpen ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+            </button>
+            {folderOpen && <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Folder Features</span>}
           </div>
         </div>
 
         {/* Three columns — each scrolls independently */}
-        <div className="grid grid-cols-3 flex-1 min-h-0 divide-x divide-smoke-700 overflow-hidden">
+        <div
+          className="grid flex-1 min-h-0 overflow-hidden divide-x divide-smoke-700"
+          style={{ gridTemplateColumns: `${styleOpen ? "220px" : "32px"} 1fr ${folderOpen ? "220px" : "32px"}` }}
+        >
 
-          {/* Left — Style always visible */}
-          <div className="overflow-y-auto px-4 py-3">
-            <StyleTab vs={draft.visualStyle} onChange={patchVS} durationPx={durationPx} />
+          {/* Left — Style */}
+          <div className={`min-h-0 ${styleOpen ? "overflow-y-auto px-4 py-3" : "overflow-hidden"}`}>
+            {styleOpen && <StyleTab vs={draft.visualStyle} onChange={patchVS} durationPx={durationPx} />}
           </div>
 
           {/* Center — Content or active Golem panel */}
@@ -521,13 +547,15 @@ export default function EventForm({
             )}
           </div>
 
-          {/* Right — Folder Features always visible */}
-          <div className="overflow-y-auto px-4 py-3">
-            <FolderTab
-              folderId={draft.folderId}
-              folderFieldValues={draft.folderFieldValues}
-              onFieldValueChange={setFieldValue}
-            />
+          {/* Right — Folder Features */}
+          <div className={`min-h-0 ${folderOpen ? "overflow-y-auto px-4 py-3" : "overflow-hidden"}`}>
+            {folderOpen && (
+              <FolderTab
+                folderId={draft.folderId}
+                folderFieldValues={draft.folderFieldValues}
+                onFieldValueChange={setFieldValue}
+              />
+            )}
           </div>
 
         </div>

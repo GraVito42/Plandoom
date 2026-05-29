@@ -20,7 +20,5 @@ export async function POST(request: Request) {
   // For a real implementation, look up which user owns this channelId,
   // then call the sync logic for that user.
   // For now we acknowledge the webhook and let the user trigger manual sync.
-  console.log(`Glando webhook: channel=${channelId} state=${resourceState}`)
-
   return new NextResponse(null, { status: 200 })
 }
