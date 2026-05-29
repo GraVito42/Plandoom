@@ -20,11 +20,18 @@ const visualStyleSchema = z.object({
   shapeSmoothing: z.number().min(0).max(100).optional(),
   textPosition: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
   widthPercent: z.number().min(50).max(100).optional(),
+  leftOffset: z.number().min(0).max(49).optional(),
+  folderSymbol: z.object({
+    icon: z.string().nullable(),
+    customImage: z.string().nullable().optional(),
+    color: z.string(),
+    size: z.number().min(12).max(96),
+    position: z.object({ x: z.number(), y: z.number() }).nullable(),
+  }).nullable().optional(),
 })
 
 const createFolderSchema = z.object({
   name: z.string().min(1).max(100),
-  color: z.string().optional(),
   icon: z.string().optional(),
   visualStyle: visualStyleSchema.nullable().optional(),
 })
@@ -35,6 +42,7 @@ export async function GET() {
     const folders = await db.folder.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "asc" },
+      include: { _count: { select: { events: true } } },
     })
     return NextResponse.json(folders)
   } catch {
@@ -51,7 +59,6 @@ export async function POST(request: Request) {
     const folder = await db.folder.create({
       data: {
         name: data.name,
-        color: data.color,
         icon: data.icon,
         visualStyle: data.visualStyle
           ? (data.visualStyle as unknown as Prisma.InputJsonValue)

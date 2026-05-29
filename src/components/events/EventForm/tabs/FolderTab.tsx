@@ -193,7 +193,7 @@ export default function FolderTab({ folderId, folderFieldValues, onFieldValueCha
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-full shrink-0"
-            style={{ backgroundColor: folder.color ?? "#484e55" }}
+            style={{ backgroundColor: (() => { const vs = folder.visualStyle as Record<string, unknown> | null | undefined; return typeof vs?.fillColor === "string" ? vs.fillColor : "#484e55" })() }}
           />
           <span className="text-sm font-medium text-smoke-200">{folder.name}</span>
         </div>

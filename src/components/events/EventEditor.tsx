@@ -4,6 +4,7 @@ import { useState } from "react"
 import type React from "react"
 import type { ApiEvent, VisualStyle } from "@/types"
 import VisualStylePicker from "./VisualStylePicker"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 interface EventEditorProps {
   date: Date | null
@@ -61,6 +62,7 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   shapeSmoothing: 0,
   textPosition: null,
   widthPercent: 100,
+  leftOffset: 0,
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
@@ -85,6 +87,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
       shapeSmoothing: typeof r.shapeSmoothing === "number" ? r.shapeSmoothing : 0,
       textPosition: tp && typeof tp.x === "number" && typeof tp.y === "number" ? tp : null,
       widthPercent: typeof r.widthPercent === "number" ? r.widthPercent : 100,
+      leftOffset: typeof r.leftOffset === "number" ? r.leftOffset : 0,
     }
   }
   return DEFAULT_VISUAL_STYLE
@@ -130,7 +133,8 @@ export default function EventEditor({
   const [visualStyle, setVisualStyle] = useState<VisualStyle>(
     parseVisualStyle(eventToEdit?.visualStyle)
   )
-  const [showStyle, setShowStyle] = useState(false)
+  const [styleOpen, setStyleOpen] = useState(false)
+  const [folderOpen, setFolderOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -174,13 +178,12 @@ export default function EventEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-navy-950/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-navy-950/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-md mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
+      <div className="relative z-10 w-full max-w-4xl mx-4 bg-smoke-900 border border-smoke-700 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-smoke-700 shrink-0">
           <h2 className="text-sm font-semibold text-smoke-100 tracking-wide uppercase">
             {isEdit ? "Edit event" : "New event"}
           </h2>
@@ -192,165 +195,220 @@ export default function EventEditor({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-xs text-smoke-300 mb-1">Title</label>
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Event name..."
-              className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 placeholder-smoke-500 focus:outline-none focus:border-doom-gold transition-colors"
-            />
-          </div>
+        {/* Three columns */}
+        <div className="flex flex-1 min-h-0 divide-x divide-smoke-700 overflow-hidden">
 
-          <div>
-            <label className="block text-xs text-smoke-300 mb-1">
-              Description <span className="text-smoke-500">(optional)</span>
-            </label>
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Additional notes..."
-              className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 placeholder-smoke-500 focus:outline-none focus:border-doom-gold transition-colors"
-            />
-          </div>
-
-          {/* Location */}
-          <div>
-            <label className="block text-xs text-smoke-300 mb-1">
-              Location <span className="text-smoke-500">(optional)</span>
-            </label>
-            <div className="relative">
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Address or place..."
-                className="w-full bg-smoke-800 border border-smoke-600 rounded-lg pl-3 pr-8 py-2 text-sm text-smoke-100 placeholder-smoke-500 focus:outline-none focus:border-doom-gold transition-colors"
-              />
-              {location.trim() && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.trim())}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-smoke-500 hover:text-doom-gold transition-colors text-xs"
-                  title="Open in Google Maps"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  ⊕
-                </a>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-smoke-300 mb-1">Date</label>
-            <input
-              type="date"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 focus:outline-none focus:border-doom-gold transition-colors"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-smoke-300 mb-1">Start</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 focus:outline-none focus:border-doom-gold transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-smoke-300 mb-1">End</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 focus:outline-none focus:border-doom-gold transition-colors"
-              />
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={flexible}
-              onChange={(e) => setFlexible(e.target.checked)}
-              className="accent-doom-gold"
-            />
-            <span className="text-xs text-smoke-300">
-              Flexible event — Plando can reschedule it
-            </span>
-          </label>
-
-          {/* Visual style section */}
-          <div className="border-t border-smoke-700 pt-3">
+          {/* LEFT — Style (~20%) */}
+          <div
+            className="flex flex-col shrink-0 transition-all duration-200 overflow-hidden"
+            style={{ width: styleOpen ? "15%" : "2rem" }}
+          >
             <button
               type="button"
-              onClick={() => setShowStyle((v) => !v)}
-              className="flex items-center gap-1.5 text-xs text-smoke-400 hover:text-smoke-200 transition-colors"
+              onClick={() => setStyleOpen((o) => !o)}
+              className={`flex items-center shrink-0 border-b border-smoke-700 w-full hover:bg-smoke-800 transition-colors ${styleOpen ? "justify-between px-3 py-2" : "justify-center py-2"}`}
             >
-              <span
-                className="inline-block transition-transform duration-150"
-                style={{ transform: showStyle ? "rotate(90deg)" : "rotate(0deg)" }}
-              >
-                ▶
-              </span>
-              Style
-              {/* Live preview mini-block */}
-              <span
-                className="ml-1 inline-flex items-center gap-0.5"
-                style={{ fontFamily: visualStyle.fontFamily !== "inherit" ? visualStyle.fontFamily : undefined }}
-              >
-                <span
-                  className="inline-block w-10 h-3.5 text-[7px] leading-none flex items-center justify-center overflow-hidden"
-                  style={previewBorderStyle(visualStyle)}
-                >
-                  Aa
-                </span>
-              </span>
+              {styleOpen ? (
+                <>
+                  <span className="text-[10px] text-smoke-400 uppercase tracking-widest select-none">Style</span>
+                  <ChevronLeft size={14} className="text-smoke-400 shrink-0" />
+                </>
+              ) : (
+                <ChevronRight size={14} className="text-smoke-400" />
+              )}
             </button>
-
-            {showStyle && (
-              <div className="mt-3">
+            {styleOpen ? (
+              <div className="flex-1 overflow-y-auto px-3 py-3">
+                <div className="mb-3">
+                  <span className="text-[10px] text-smoke-500 block mb-1">Preview</span>
+                  <span
+                    className="block w-full h-4 text-[7px] leading-none flex items-center justify-center overflow-hidden"
+                    style={previewBorderStyle(visualStyle)}
+                  >
+                    Aa
+                  </span>
+                </div>
                 <VisualStylePicker value={visualStyle} onChange={setVisualStyle} />
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <span className="text-[10px] uppercase tracking-widest text-smoke-600 whitespace-nowrap select-none [writing-mode:vertical-rl] rotate-180">
+                  Style
+                </span>
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-between pt-1">
-            {isEdit && eventToEdit ? (
-              <button
-                type="button"
-                onClick={() => onDelete(eventToEdit.id)}
-                className="text-xs text-doom-ember hover:text-red-400 transition-colors"
-              >
-                Delete event
-              </button>
-            ) : (
-              <div />
-            )}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm text-smoke-400 hover:text-smoke-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!title.trim() || loading}
-                className="px-4 py-2 text-sm font-medium bg-doom-gold text-navy-950 rounded-lg hover:bg-doom-gold/80 disabled:opacity-40 transition-colors"
-              >
-                {loading ? "..." : isEdit ? "Save" : "Create"}
-              </button>
+          {/* CENTER — Content (~60%, flex-1) */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <div className="px-4 py-1.5 border-b border-smoke-700 shrink-0">
+              <span className="text-[10px] text-smoke-500 uppercase tracking-widest">Content</span>
             </div>
+            <form
+              id="event-editor-form"
+              onSubmit={handleSubmit}
+              className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-4"
+            >
+              <div>
+                <label className="block text-xs text-smoke-300 mb-1">Title</label>
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Event name..."
+                  className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 placeholder-smoke-500 focus:outline-none focus:border-doom-gold transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-smoke-300 mb-1">
+                  Description <span className="text-smoke-500">(optional)</span>
+                </label>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Additional notes..."
+                  className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 placeholder-smoke-500 focus:outline-none focus:border-doom-gold transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-smoke-300 mb-1">
+                  Location <span className="text-smoke-500">(optional)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Address or place..."
+                    className="w-full bg-smoke-800 border border-smoke-600 rounded-lg pl-3 pr-8 py-2 text-sm text-smoke-100 placeholder-smoke-500 focus:outline-none focus:border-doom-gold transition-colors"
+                  />
+                  {location.trim() && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.trim())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-smoke-500 hover:text-doom-gold transition-colors text-xs"
+                      title="Open in Google Maps"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      ⊕
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-smoke-300 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 focus:outline-none focus:border-doom-gold transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-smoke-300 mb-1">Start</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 focus:outline-none focus:border-doom-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-smoke-300 mb-1">End</label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full bg-smoke-800 border border-smoke-600 rounded-lg px-3 py-2 text-sm text-smoke-100 focus:outline-none focus:border-doom-gold transition-colors"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={flexible}
+                  onChange={(e) => setFlexible(e.target.checked)}
+                  className="accent-doom-gold"
+                />
+                <span className="text-xs text-smoke-300">
+                  Flexible event — Plando can reschedule it
+                </span>
+              </label>
+            </form>
           </div>
-        </form>
+
+          {/* RIGHT — Folder (~20%) */}
+          <div
+            className="flex flex-col shrink-0 transition-all duration-200 overflow-hidden"
+            style={{ width: folderOpen ? "15%" : "2rem" }}
+          >
+            <button
+              type="button"
+              onClick={() => setFolderOpen((o) => !o)}
+              className={`flex items-center shrink-0 border-b border-smoke-700 w-full hover:bg-smoke-800 transition-colors ${folderOpen ? "justify-between px-3 py-2" : "justify-center py-2"}`}
+            >
+              {folderOpen ? (
+                <>
+                  <span className="text-[10px] text-smoke-400 uppercase tracking-widest select-none">Folder</span>
+                  <ChevronRight size={14} className="text-smoke-400 shrink-0" />
+                </>
+              ) : (
+                <ChevronLeft size={14} className="text-smoke-400" />
+              )}
+            </button>
+            {folderOpen ? (
+              <div className="flex-1 overflow-y-auto px-3 py-3">
+                <p className="text-[10px] text-smoke-600 italic">No folder selected.</p>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <span className="text-[10px] uppercase tracking-widest text-smoke-600 whitespace-nowrap select-none [writing-mode:vertical-rl]">
+                  Folder
+                </span>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Footer — actions */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-smoke-700 shrink-0">
+          {isEdit && eventToEdit ? (
+            <button
+              type="button"
+              onClick={() => onDelete(eventToEdit.id)}
+              className="text-xs text-doom-ember hover:text-red-400 transition-colors"
+            >
+              Delete event
+            </button>
+          ) : (
+            <div />
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-smoke-400 hover:text-smoke-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="event-editor-form"
+              disabled={!title.trim() || loading}
+              className="px-4 py-2 text-sm font-medium bg-doom-gold text-navy-950 rounded-lg hover:bg-doom-gold/80 disabled:opacity-40 transition-colors"
+            >
+              {loading ? "..." : isEdit ? "Save" : "Create"}
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   )

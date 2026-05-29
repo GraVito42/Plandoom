@@ -105,6 +105,13 @@ interface PolygonEditorProps {
   onTextPosition: (pos: { x: number; y: number } | null) => void
   widthPercent: number
   onWidthPercent: (v: number) => void
+  leftOffset: number
+  onLeftOffset: (v: number) => void
+  // Optional: folder symbol position handle
+  folderSymbolPosition?: { x: number; y: number } | null
+  onFolderSymbolPosition?: (pos: { x: number; y: number } | null) => void
+  folderSymbolIcon?: string | null
+  folderSymbolImage?: string | null
 }
 
 export default function PolygonEditor({
@@ -117,6 +124,12 @@ export default function PolygonEditor({
   onTextPosition,
   widthPercent,
   onWidthPercent,
+  leftOffset,
+  onLeftOffset,
+  folderSymbolPosition,
+  onFolderSymbolPosition,
+  folderSymbolIcon,
+  folderSymbolImage,
 }: PolygonEditorProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [svgW, setSvgW] = useState(220)
@@ -145,13 +158,17 @@ export default function PolygonEditor({
   const closedRef = useRef(closed)
   const ptrCleanupRef = useRef<(() => void) | null>(null)
   const widthCleanupRef = useRef<(() => void) | null>(null)
+  const leftCleanupRef = useRef<(() => void) | null>(null)
   const textCleanupRef = useRef<(() => void) | null>(null)
+  const symbolCleanupRef = useRef<(() => void) | null>(null)
   useEffect(() => { pointsRef.current = points }, [points])
   useEffect(() => { closedRef.current = closed }, [closed])
   useEffect(() => () => {
     ptrCleanupRef.current?.()
     widthCleanupRef.current?.()
+    leftCleanupRef.current?.()
     textCleanupRef.current?.()
+    symbolCleanupRef.current?.()
   }, [])
 
   // ── Preset helpers ────────────────────────────────────────────────────────────
@@ -203,6 +220,11 @@ export default function PolygonEditor({
     return Math.round(Math.max(50, Math.min(100, ((clientX - rect.left) / rect.width) * 100)))
   }
 
+  function svgXtoLeftOffset(clientX: number): number {
+    const rect = svgRef.current!.getBoundingClientRect()
+    return Math.round(Math.max(0, Math.min(49, ((clientX - rect.left) / rect.width) * 100)))
+  }
+
   function px(p: Point) {
     return { cx: p.x * svgW, cy: p.y * clampedH }
   }
@@ -245,7 +267,7 @@ export default function PolygonEditor({
     window.addEventListener("pointercancel", onUp)
   }
 
-  // ── Drag width handle ─────────────────────────────────────────────────────────
+  // ── Drag right-edge (width) handle ───────────────────────────────────────────
 
   function startWidthDrag(e: React.PointerEvent) {
     e.stopPropagation()
@@ -258,6 +280,28 @@ export default function PolygonEditor({
       window.removeEventListener("pointercancel", onUp)
     }
     widthCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", onUp)
+  }
+
+  // ── Drag left-edge (leftOffset) handle ───────────────────────────────────────
+
+  function startLeftOffsetDrag(e: React.PointerEvent) {
+    e.stopPropagation()
+    function onMove(ev: PointerEvent) { onLeftOffset(svgXtoLeftOffset(ev.clientX)) }
+    function onUp(ev: PointerEvent) {
+      onLeftOffset(svgXtoLeftOffset(ev.clientX))
+      leftCleanupRef.current = null
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    leftCleanupRef.current = () => {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       window.removeEventListener("pointercancel", onUp)
@@ -289,6 +333,30 @@ export default function PolygonEditor({
     window.addEventListener("pointercancel", onUp)
   }
 
+  // ── Drag folder symbol position ───────────────────────────────────────────────
+
+  function startSymbolDrag(e: React.PointerEvent) {
+    if (!onFolderSymbolPosition) return
+    const onSymbolPos = onFolderSymbolPosition
+    e.stopPropagation()
+    function onMove(ev: PointerEvent) { onSymbolPos(toNorm(ev.clientX, ev.clientY)) }
+    function onUp(ev: PointerEvent) {
+      onSymbolPos(toNorm(ev.clientX, ev.clientY))
+      symbolCleanupRef.current = null
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    symbolCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", onUp)
+  }
+
   // ── Close / reset ─────────────────────────────────────────────────────────────
 
   function closeShape() {
@@ -305,9 +373,10 @@ export default function PolygonEditor({
     onTextPosition(null)
   }
 
-  // ── Width indicator X ─────────────────────────────────────────────────────────
+  // ── Edge indicator X positions ────────────────────────────────────────────────
 
   const widthLineX = (widthPercent / 100) * svgW
+  const leftLineX = (leftOffset / 100) * svgW
 
   // Pixel-space polyline for open drawing phase
   const polyPts = points.map((p) => `${(p.x * svgW).toFixed(1)},${(p.y * clampedH).toFixed(1)}`).join(" ")
@@ -378,11 +447,24 @@ export default function PolygonEditor({
           <line x1={svgW * 0.5} y1={0} x2={svgW * 0.5} y2={clampedH} stroke="#23262a" strokeWidth={1} />
           <line x1={0} y1={clampedH * 0.5} x2={svgW} y2={clampedH * 0.5} stroke="#23262a" strokeWidth={1} />
 
-          {/* Width indicator dashed line */}
+          {/* Right-edge indicator dashed line */}
           {closed && (
             <line
               x1={widthLineX} y1={0}
               x2={widthLineX} y2={clampedH}
+              stroke="#c9a84c"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+              opacity={0.45}
+              pointerEvents="none"
+            />
+          )}
+
+          {/* Left-edge indicator dashed line */}
+          {closed && leftOffset > 0 && (
+            <line
+              x1={leftLineX} y1={0}
+              x2={leftLineX} y2={clampedH}
               stroke="#c9a84c"
               strokeWidth={1}
               strokeDasharray="4 3"
@@ -447,6 +529,27 @@ export default function PolygonEditor({
             </g>
           )}
 
+          {/* Folder symbol position handle — draggable "◈" badge */}
+          {onFolderSymbolPosition && folderSymbolPosition && (
+            <g
+              transform={`translate(${folderSymbolPosition.x * svgW},${folderSymbolPosition.y * clampedH})`}
+              style={{ cursor: "move", touchAction: "none" }}
+              onPointerDown={startSymbolDrag}
+            >
+              <circle r={12} fill="rgba(0,0,0,0.45)" stroke="#c9a84c" strokeWidth={1} />
+              <text
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="#c9a84c"
+                fontSize={folderSymbolIcon ? 9 : 11}
+                fontWeight="600"
+                pointerEvents="none"
+              >
+                {folderSymbolImage ? "🖼" : (folderSymbolIcon ? folderSymbolIcon.slice(0, 2) : "◈")}
+              </text>
+            </g>
+          )}
+
           {/* Polygon handles */}
           {points.map((p, i) => {
             const { cx, cy } = px(p)
@@ -464,17 +567,28 @@ export default function PolygonEditor({
             )
           })}
 
-          {/* Width drag triangle on right edge */}
+          {/* Right-edge drag handle ◄ */}
           {closed && (
             <g
               transform={`translate(${svgW - 1},${clampedH / 2})`}
               style={{ cursor: "ew-resize", touchAction: "none" }}
               onPointerDown={startWidthDrag}
             >
-              {/* Invisible hit area */}
               <rect x={-10} y={-14} width={14} height={28} fill="transparent" />
-              {/* Triangle pointing left ◄ — drag it to resize width */}
               <polygon points="-8,-8 0,0 -8,8" fill="#c9a84c" opacity={0.85} />
+              <line x1={0} y1={-9} x2={0} y2={9} stroke="#c9a84c" strokeWidth={1.5} opacity={0.6} />
+            </g>
+          )}
+
+          {/* Left-edge drag handle ► */}
+          {closed && (
+            <g
+              transform={`translate(1,${clampedH / 2})`}
+              style={{ cursor: "ew-resize", touchAction: "none" }}
+              onPointerDown={startLeftOffsetDrag}
+            >
+              <rect x={-4} y={-14} width={14} height={28} fill="transparent" />
+              <polygon points="8,-8 0,0 8,8" fill="#c9a84c" opacity={0.85} />
               <line x1={0} y1={-9} x2={0} y2={9} stroke="#c9a84c" strokeWidth={1.5} opacity={0.6} />
             </g>
           )}
@@ -528,6 +642,24 @@ export default function PolygonEditor({
             Remove text handle
           </button>
         )}
+        {onFolderSymbolPosition && !folderSymbolPosition && (
+          <button
+            type="button"
+            onClick={() => onFolderSymbolPosition({ x: 0.85, y: 0.1 })}
+            className="px-2.5 py-1 text-xs bg-smoke-800 border border-doom-gold/30 text-doom-gold/70 rounded hover:text-doom-gold hover:border-doom-gold/60 transition-colors"
+          >
+            Place symbol
+          </button>
+        )}
+        {onFolderSymbolPosition && folderSymbolPosition && (
+          <button
+            type="button"
+            onClick={() => onFolderSymbolPosition(null)}
+            className="px-2.5 py-1 text-xs text-doom-gold/50 hover:text-doom-gold/80 transition-colors"
+          >
+            Remove symbol handle
+          </button>
+        )}
         {points.length === 0 && (
           <p className="text-[10px] text-smoke-600">Click on the canvas to add points, or pick a preset above</p>
         )}
@@ -556,11 +688,17 @@ export default function PolygonEditor({
         </div>
       )}
 
-      {/* ── Width percent display ─────────────────────────────────────────────── */}
+      {/* ── Edge percent display ──────────────────────────────────────────────── */}
       {closed && (
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Width</span>
-          <span className="text-[10px] text-smoke-400 font-mono tabular-nums">{widthPercent}%</span>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Left</span>
+            <span className="text-[10px] text-smoke-400 font-mono tabular-nums">{leftOffset}%</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Right</span>
+            <span className="text-[10px] text-smoke-400 font-mono tabular-nums">{widthPercent}%</span>
+          </div>
         </div>
       )}
 

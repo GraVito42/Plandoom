@@ -20,6 +20,7 @@ const visualStyleSchema = z.object({
   shapeSmoothing: z.number().min(0).max(100).optional(),
   textPosition: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
   widthPercent: z.number().min(50).max(100).optional(),
+  leftOffset: z.number().min(0).max(49).optional(),
 })
 
 const repetitionSchema = z.object({
@@ -110,10 +111,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const from = searchParams.get("from")
     const to = searchParams.get("to")
+    const folderId = searchParams.get("folderId")
 
     const events = await db.event.findMany({
       where: {
         userId: user.id,
+        ...(folderId ? { folderId } : {}),
         ...(from && to
           ? { startTime: { gte: new Date(from) }, endTime: { lte: new Date(to) } }
           : {}),
@@ -133,10 +136,8 @@ export async function GET(request: Request) {
 // ── POST ──────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  console.log("[POST /api/events] HANDLER ENTRY")
   try {
     const user = await ensureUser()
-    console.log("[POST /api/events] user authed")
     const body: unknown = await request.json()
     const data = createEventSchema.parse(body)
 
@@ -168,8 +169,6 @@ export async function POST(request: Request) {
         new Date(data.endTime),
         data.repetition,
       )
-      console.log("[POST /api/events] occurrences generated:", occurrences.length)
-
       if (occurrences.length === 0) {
         const event = await db.event.create({
           data: { ...sharedData, startTime: new Date(data.startTime), endTime: new Date(data.endTime) },
@@ -179,7 +178,6 @@ export async function POST(request: Request) {
 
       const [first, ...rest] = occurrences
 
-      console.log("[POST /api/events] creating parent event...")
       const parent = await db.event.create({
         data: {
           ...sharedData,
@@ -188,10 +186,7 @@ export async function POST(request: Request) {
           repetition: data.repetition as unknown as Prisma.InputJsonValue,
         },
       })
-      console.log("[POST /api/events] parent created:", parent.id)
-
       if (rest.length > 0) {
-        console.log("[POST /api/events] creating", rest.length, "children...")
         for (const occ of rest) {
           await db.event.create({
             data: {
@@ -202,10 +197,8 @@ export async function POST(request: Request) {
             },
           })
         }
-        console.log("[POST /api/events] children created OK")
       }
 
-      console.log("[POST /api/events] returning 201 success")
       return NextResponse.json({ id: parent.id, count: occurrences.length }, { status: 201 })
     }
 

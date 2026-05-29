@@ -2,12 +2,17 @@
 
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { ChevronLeft } from "lucide-react"
 import { getMonday } from "@/hooks/useGrid"
 import type { ApiChip } from "@/types"
 import ChipArea from "./ChipArea"
 import FolderSetup from "@/components/folders/FolderSetup"
 
-export default function WeeklySidebar() {
+interface WeeklySidebarProps {
+  onCollapse?: () => void
+}
+
+export default function WeeklySidebar({ onCollapse }: WeeklySidebarProps = {}) {
   const weekStart = getMonday(new Date())
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekEnd.getDate() + 7)
@@ -33,13 +38,24 @@ export default function WeeklySidebar() {
         <h3 className="text-xs font-semibold text-smoke-300 uppercase tracking-widest">
           Weekly Notes
         </h3>
-        <button
-          onClick={() => setFolderSetupOpen(true)}
-          className="text-[10px] text-smoke-500 hover:text-doom-gold border border-smoke-700 hover:border-doom-gold/40 rounded px-1.5 py-0.5 transition-colors"
-          title="New folder"
-        >
-          + Folder
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setFolderSetupOpen(true)}
+            className="text-[10px] text-smoke-500 hover:text-doom-gold border border-smoke-700 hover:border-doom-gold/40 rounded px-1.5 py-0.5 transition-colors"
+            title="New folder"
+          >
+            + Folder
+          </button>
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              className="text-smoke-500 hover:text-smoke-200 transition-colors"
+              title="Collapse sidebar"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3">
         <ChipArea

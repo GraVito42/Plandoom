@@ -20,6 +20,7 @@ const visualStyleSchema = z.object({
   shapeSmoothing: z.number().min(0).max(100).optional(),
   textPosition: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
   widthPercent: z.number().min(50).max(100).optional(),
+  leftOffset: z.number().min(0).max(49).optional(),
 })
 
 const repetitionSchema = z.object({
