@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import ColorPresetsTab from "./tabs/ColorPresetsTab"
 import ShapePresetsSection from "./tabs/ShapePresetsSection"
+import DefaultSettingsTab from "./tabs/DefaultSettingsTab"
 import FolderManager from "@/components/folders/FolderManager"
 
 const TABS = [
@@ -49,7 +50,7 @@ export default function PersonalLayout() {
             <ShapePresetsSection />
           </div>
         )}
-        {activeTab === "settings" && <SettingsPlaceholder />}
+        {activeTab === "settings" && <DefaultSettingsTab />}
         {activeTab === "graphics" && <GraphicsPlaceholder />}
         {activeTab === "folders" && <FolderManager />}
       </div>
@@ -57,9 +58,6 @@ export default function PersonalLayout() {
   )
 }
 
-function SettingsPlaceholder() {
-  return <p className="text-xs text-smoke-500">Default Event Settings — coming soon</p>
-}
 
 function GraphicsPlaceholder() {
   return <p className="text-xs text-smoke-500">Global Graphics — coming soon</p>
