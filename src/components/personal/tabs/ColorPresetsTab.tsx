@@ -7,7 +7,7 @@ import { Pencil, Trash2, Plus, X } from "lucide-react"
 import type { ApiPalette, ApiFolder } from "@/types"
 
 const MAX_COLORS = 12
-const ACTIVE_PALETTE_KEY = "plandoom_active_palette"
+const DEFAULT_PALETTE_KEY = "plandoom_default_palette"
 const FALLBACK_COLORS = ["#050818", "#0f2044", "#162d5e", "#2a4d96", "#c9a84c", "#d1d5db", "#9ca3af", "#484e55"]
 
 // ── SwatchBar ─────────────────────────────────────────────────────────────────
@@ -54,20 +54,20 @@ function DefaultRow({
   onSave: (data: PaletteFormData) => Promise<void>
   onCancel: () => void
 }) {
-  const [activePaletteId, setActivePaletteId] = useState<string | null>(null)
+  const [defaultPaletteId, setDefaultPaletteId] = useState<string | null>(null)
 
   useEffect(() => {
-    const read = () => setActivePaletteId(localStorage.getItem(ACTIVE_PALETTE_KEY))
+    const read = () => setDefaultPaletteId(localStorage.getItem(DEFAULT_PALETTE_KEY))
     read()
     window.addEventListener("storage", read)
-    window.addEventListener("plandoom:active-palette-changed", read)
+    window.addEventListener("plandoom:default-palette-changed", read)
     return () => {
       window.removeEventListener("storage", read)
-      window.removeEventListener("plandoom:active-palette-changed", read)
+      window.removeEventListener("plandoom:default-palette-changed", read)
     }
   }, [])
 
-  const active = palettes.find((p) => p.id === activePaletteId) ?? palettes[0] ?? null
+  const active = defaultPaletteId ? (palettes.find((p) => p.id === defaultPaletteId) ?? null) : null
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -361,9 +361,9 @@ export default function ColorPresetsTab() {
   }
 
   async function handleDefaultSave(data: PaletteFormData) {
-    const activePaletteId = localStorage.getItem(ACTIVE_PALETTE_KEY)
-    if (activePaletteId) {
-      await fetch(`/api/palettes/${activePaletteId}`, {
+    const existingId = localStorage.getItem(DEFAULT_PALETTE_KEY)
+    if (existingId) {
+      await fetch(`/api/palettes/${existingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: data.name, colors: data.colors }),
@@ -376,8 +376,8 @@ export default function ColorPresetsTab() {
       })
       if (res.ok) {
         const newPalette = (await res.json()) as ApiPalette
-        localStorage.setItem(ACTIVE_PALETTE_KEY, newPalette.id)
-        window.dispatchEvent(new CustomEvent("plandoom:active-palette-changed"))
+        localStorage.setItem(DEFAULT_PALETTE_KEY, newPalette.id)
+        window.dispatchEvent(new CustomEvent("plandoom:default-palette-changed"))
       }
     }
     await queryClient.invalidateQueries({ queryKey: ["palettes"] })

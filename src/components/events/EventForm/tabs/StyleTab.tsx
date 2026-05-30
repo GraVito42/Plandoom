@@ -12,7 +12,7 @@ import PolygonEditor from "./PolygonEditor"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
 
-const ACTIVE_PALETTE_KEY = "plandoom_active_palette"
+const DEFAULT_PALETTE_KEY = "plandoom_default_palette"
 
 // ── Folder symbol icon registry ───────────────────────────────────────────────
 
@@ -681,16 +681,16 @@ export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFol
   const [activeField, setActiveField] = useState<ActiveColorField>("fillColor")
   const activeColor = vs[activeField]
 
-  // Legge la palette attiva da localStorage e la mantiene in sync
-  const [activePaletteId, setActivePaletteId] = useState<string | null>(() => {
+  // Legge la palette di default da localStorage e la mantiene in sync
+  const [defaultPaletteId, setDefaultPaletteId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null
-    return localStorage.getItem(ACTIVE_PALETTE_KEY)
+    return localStorage.getItem(DEFAULT_PALETTE_KEY)
   })
 
   useEffect(() => {
-    const handler = () => setActivePaletteId(localStorage.getItem(ACTIVE_PALETTE_KEY))
-    window.addEventListener("plandoom:active-palette-changed", handler)
-    return () => window.removeEventListener("plandoom:active-palette-changed", handler)
+    const handler = () => setDefaultPaletteId(localStorage.getItem(DEFAULT_PALETTE_KEY))
+    window.addEventListener("plandoom:default-palette-changed", handler)
+    return () => window.removeEventListener("plandoom:default-palette-changed", handler)
   }, [])
 
   const { data: palettes = [] } = useQuery<ApiPalette[]>({
@@ -702,9 +702,9 @@ export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFol
     },
   })
 
-  // Gerarchia: prioritySwatches (folder) > palette attiva (localStorage) > plandoom_color_presets
-  const activePaletteSwatches = palettes.find((p) => p.id === activePaletteId)?.colors
-  const effectiveSwatches = prioritySwatches ?? activePaletteSwatches
+  // Gerarchia: prioritySwatches (folder) > palette di default > plandoom_color_presets
+  const defaultPaletteSwatches = palettes.find((p) => p.id === defaultPaletteId)?.colors
+  const effectiveSwatches = prioritySwatches ?? defaultPaletteSwatches
 
   function applyPreset(color: string) {
     onChange({ [activeField]: color } as Partial<VisualStyle>)
