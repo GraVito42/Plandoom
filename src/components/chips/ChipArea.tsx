@@ -116,6 +116,7 @@ export default function ChipArea({
     queryKey: ["folders"],
     queryFn: async () => {
       const res = await fetch("/api/folders")
+      if (!res.ok) throw new Error("Failed to load folders")
       return res.json() as Promise<ApiFolder[]>
     },
   })
