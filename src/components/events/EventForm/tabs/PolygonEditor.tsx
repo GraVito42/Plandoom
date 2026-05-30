@@ -112,6 +112,8 @@ interface PolygonEditorProps {
   onFolderSymbolPosition?: (pos: { x: number; y: number } | null) => void
   folderSymbolIcon?: string | null
   folderSymbolImage?: string | null
+  // When true, hides internal user-preset list and "Save as preset" button
+  hidePresets?: boolean
 }
 
 export default function PolygonEditor({
@@ -130,6 +132,7 @@ export default function PolygonEditor({
   onFolderSymbolPosition,
   folderSymbolIcon,
   folderSymbolImage,
+  hidePresets = false,
 }: PolygonEditorProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [svgW, setSvgW] = useState(220)
@@ -400,7 +403,7 @@ export default function PolygonEditor({
             <span className="text-xs text-smoke-300">{preset.name}</span>
           </button>
         ))}
-        {userPresets.length > 0 && (
+        {!hidePresets && userPresets.length > 0 && (
           <div className="border-t border-smoke-800 mt-0.5 pt-0.5">
             {userPresets.map((preset) => (
               <div key={preset.id} className="flex items-center mx-0.5">
@@ -615,7 +618,7 @@ export default function PolygonEditor({
             Reset
           </button>
         )}
-        {closed && points.length >= 3 && !savePromptOpen && (
+        {!hidePresets && closed && points.length >= 3 && !savePromptOpen && (
           <button
             type="button"
             onClick={() => setSavePromptOpen(true)}
@@ -703,7 +706,7 @@ export default function PolygonEditor({
       )}
 
       {/* ── Save as preset form ───────────────────────────────────────────────── */}
-      {savePromptOpen && (
+      {!hidePresets && savePromptOpen && (
         <div className="flex gap-1.5 items-center">
           <input
             type="text"
