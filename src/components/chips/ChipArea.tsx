@@ -16,6 +16,7 @@ const DEFAULT_CHIP_STYLE: VisualStyle = {
   sideColor: "#c9a84c",
   sideWidth: 2,
   fillColor: "#162d5e",
+  fillOpacity: 100,
   textColor: "#d1d5db",
   fontFamily: "inherit",
   hasCheckbox: false,
@@ -40,6 +41,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     sideColor: typeof r.sideColor === "string" ? r.sideColor : DEFAULT_CHIP_STYLE.sideColor,
     sideWidth: typeof r.sideWidth === "number" ? r.sideWidth : DEFAULT_CHIP_STYLE.sideWidth,
     fillColor: typeof r.fillColor === "string" ? r.fillColor : DEFAULT_CHIP_STYLE.fillColor,
+    fillOpacity: typeof r.fillOpacity === "number" ? r.fillOpacity : 100,
     textColor: typeof r.textColor === "string" ? r.textColor : DEFAULT_CHIP_STYLE.textColor,
     fontFamily: typeof r.fontFamily === "string" ? r.fontFamily : DEFAULT_CHIP_STYLE.fontFamily,
     hasCheckbox: typeof r.hasCheckbox === "boolean" ? r.hasCheckbox : DEFAULT_CHIP_STYLE.hasCheckbox,
@@ -118,25 +120,36 @@ export default function ChipArea({
     },
   })
 
-  // BUG 1: droppable drop zone for daily chip areas so weekly chips can be
-  // dragged here and reassigned to area="daily" for this specific day.
   const isDaily = area === "daily" && !!dayTarget
-  const droppableId = isDaily ? `chip-daily-${toDateStr(dayTarget!)}` : `chip-noop-${area}`
+  const isWeekly = area === "weekly" && weekNumber != null && year != null
+  const droppableId = isDaily
+    ? `chip-daily-${toDateStr(dayTarget!)}`
+    : isWeekly
+      ? `chip-weekly-${year}-${weekNumber}`
+      : `chip-noop-${area}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId })
 
   useDndMonitor({
     async onDragEnd({ active, over }: DragEndEvent) {
-      // Only handle drops on this component's own daily drop zone
-      if (!isDaily || !over || over.id !== droppableId) return
+      if (!over || over.id !== droppableId) return
       const data = active.data.current as { type: string; chipId?: string } | undefined
       if (data?.type !== "chip" || !data.chipId) return
 
-      await fetch(`/api/chips/${data.chipId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ area: "daily", dayTarget }),
-      })
-      await queryClient.invalidateQueries({ queryKey: ["chips"] })
+      if (isDaily) {
+        await fetch(`/api/chips/${data.chipId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ area: "daily", dayTarget }),
+        })
+        await queryClient.invalidateQueries({ queryKey: ["chips"] })
+      } else if (isWeekly) {
+        await fetch(`/api/chips/${data.chipId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ area: "weekly", dayTarget: null, weekNumber, year }),
+        })
+        await queryClient.invalidateQueries({ queryKey: ["chips"] })
+      }
     },
   })
 
@@ -157,7 +170,7 @@ export default function ChipArea({
 
   return (
     <div
-      ref={isDaily ? setNodeRef : undefined}
+      ref={(isDaily || isWeekly) ? setNodeRef : undefined}
       className={`flex flex-col gap-1 min-h-6 rounded transition-colors ${
         isOver ? "bg-doom-gold/10" : ""
       }`}

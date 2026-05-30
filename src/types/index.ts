@@ -13,6 +13,7 @@ export type VisualStyle = {
   sideColor: string
   sideWidth: number
   fillColor: string
+  fillOpacity: number       // 0-100: fill transparency; 100 = fully opaque
   textColor: string
   fontFamily: string
   hasCheckbox: boolean

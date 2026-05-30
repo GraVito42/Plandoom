@@ -38,6 +38,16 @@ function formatTime(date: Date): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
 }
 
+function fillWithOpacity(color: string, opacity: number): string {
+  if (opacity >= 100 || color === "transparent") return color
+  const hex = color.startsWith("#") ? color.slice(1) : null
+  if (!hex || (hex.length !== 6 && hex.length !== 3)) return color
+  const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16)
+  const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16)
+  const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${(opacity / 100).toFixed(2)})`
+}
+
 function parseVisualStyle(raw: unknown): VisualStyle {
   const defaults: VisualStyle = {
     shape: "rounded",
@@ -46,6 +56,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     sideColor: "#c9a84c",
     sideWidth: 2,
     fillColor: "#162d5e",
+    fillOpacity: 100,
     textColor: "#d1d5db",
     fontFamily: "inherit",
     hasCheckbox: false,
@@ -69,6 +80,7 @@ function parseVisualStyle(raw: unknown): VisualStyle {
     sideColor: typeof r.sideColor === "string" ? r.sideColor : defaults.sideColor,
     sideWidth: typeof r.sideWidth === "number" ? r.sideWidth : defaults.sideWidth,
     fillColor: typeof r.fillColor === "string" ? r.fillColor : defaults.fillColor,
+    fillOpacity: typeof r.fillOpacity === "number" ? r.fillOpacity : 100,
     textColor: typeof r.textColor === "string" ? r.textColor : defaults.textColor,
     fontFamily: typeof r.fontFamily === "string" ? r.fontFamily : defaults.fontFamily,
     hasCheckbox: typeof r.hasCheckbox === "boolean" ? r.hasCheckbox : defaults.hasCheckbox,
@@ -206,7 +218,7 @@ export default function EventBlock({
         onKeyDown={(e) => e.key === "Enter" && onClick()}
         className="relative h-full overflow-hidden hover:brightness-110 transition-all cursor-grab active:cursor-grabbing focus:outline-none focus:ring-1 focus:ring-doom-gold/50 select-none"
         style={{
-          backgroundColor: vs.fillColor,
+          backgroundColor: fillWithOpacity(vs.fillColor, vs.fillOpacity),
           borderRadius: radius,
           ...(hasCustomShape && { clipPath: `url(#${clipId})` }),
           ...frameStyle,

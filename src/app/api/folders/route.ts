@@ -11,6 +11,7 @@ const visualStyleSchema = z.object({
   sideColor: z.string(),
   sideWidth: z.number(),
   fillColor: z.string(),
+  fillOpacity: z.number().min(0).max(100).optional(),
   textColor: z.string(),
   eventType: z.string(),
   fontFamily: z.string(),

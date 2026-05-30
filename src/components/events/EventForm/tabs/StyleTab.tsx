@@ -22,6 +22,18 @@ type SymbolIconName = keyof typeof SYMBOL_ICONS
 const ICON_NAMES = Object.keys(SYMBOL_ICONS) as SymbolIconName[]
 
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fillWithOpacity(color: string, opacity: number): string {
+  if (opacity >= 100 || color === "transparent") return color
+  const hex = color.startsWith("#") ? color.slice(1) : null
+  if (!hex || (hex.length !== 6 && hex.length !== 3)) return color
+  const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16)
+  const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16)
+  const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${(opacity / 100).toFixed(2)})`
+}
+
 // ── FolderSymbolSection ───────────────────────────────────────────────────────
 
 function FolderSymbolSection({
@@ -507,7 +519,7 @@ function EventPreview({ vs, previewH, folderSymbol }: { vs: VisualStyle; preview
     position: "relative",
     height: previewH,
     width: `${widthPct}%`,
-    backgroundColor: vs.fillColor === "transparent" ? "transparent" : vs.fillColor,
+    backgroundColor: vs.fillColor === "transparent" ? "transparent" : fillWithOpacity(vs.fillColor, vs.fillOpacity),
     borderRadius: radius,
     // CSS border only for standard shapes
     ...(hasCustomShape ? {} : {
@@ -675,12 +687,27 @@ export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFol
       )}
 
       {/* Fill */}
-      <ColorInput
-        label="Fill"
-        value={vs.fillColor}
-        onChange={(v) => onChange({ fillColor: v })}
-        onActive={() => setActiveField("fillColor")}
-      />
+      <div className="flex flex-col gap-2">
+        <ColorInput
+          label="Fill"
+          value={vs.fillColor}
+          onChange={(v) => onChange({ fillColor: v })}
+          onActive={() => setActiveField("fillColor")}
+        />
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-smoke-500 uppercase tracking-wider w-14 shrink-0">Opacity</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={vs.fillOpacity}
+            onChange={(e) => onChange({ fillOpacity: Number(e.target.value) })}
+            className="flex-1 accent-doom-gold"
+          />
+          <span className="text-[10px] text-smoke-400 w-8 text-right shrink-0 tabular-nums">{vs.fillOpacity}%</span>
+        </div>
+      </div>
 
       {/* Frame */}
       <div className="flex flex-col gap-2">

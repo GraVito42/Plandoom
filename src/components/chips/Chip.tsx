@@ -5,6 +5,16 @@ import type { ApiChip, VisualStyle } from "@/types"
 
 const UNIT_PX = 28  // 30 min = 28px
 
+function fillWithOpacity(color: string, opacity: number): string {
+  if (opacity >= 100 || color === "transparent") return color
+  const hex = color.startsWith("#") ? color.slice(1) : null
+  if (!hex || (hex.length !== 6 && hex.length !== 3)) return color
+  const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16)
+  const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16)
+  const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${(opacity / 100).toFixed(2)})`
+}
+
 function shapeRadius(shape: VisualStyle["shape"]): string {
   if (shape === "pill") return "9999px"
   if (shape === "rounded") return "4px"
@@ -54,7 +64,7 @@ export default function Chip({
       {...attributes}
       style={{
         ...sizeStyle,
-        backgroundColor: vs.fillColor === "transparent" ? "transparent" : vs.fillColor,
+        backgroundColor: fillWithOpacity(vs.fillColor, vs.fillOpacity),
         color: vs.textColor,
         borderRadius: radius,
         borderWidth: fw,
@@ -96,17 +106,24 @@ export default function Chip({
           </div>
         )}
 
-        {/* Title — click to edit */}
-        <span
-          className="flex-1 text-xs leading-tight min-w-0 truncate"
-          style={{
-            cursor: onEdit ? "pointer" : "default",
-            color: vs.textColor,
-          }}
-          onClick={onEdit}
-        >
-          {chip.title}
-        </span>
+        {/* Title + location */}
+        <div className="flex-1 min-w-0">
+          <span
+            className="text-xs leading-tight truncate block"
+            style={{ cursor: onEdit ? "pointer" : "default", color: vs.textColor }}
+            onClick={onEdit}
+          >
+            {chip.title}
+          </span>
+          {chip.location && (
+            <span
+              className="text-[10px] leading-tight truncate block mt-0.5"
+              style={{ color: vs.textColor, opacity: 0.6 }}
+            >
+              📍 {chip.location}
+            </span>
+          )}
+        </div>
 
         {/* Actions — visible on hover */}
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">

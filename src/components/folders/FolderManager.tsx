@@ -128,18 +128,31 @@ function FolderCard({
   folder,
   onEdit,
   onDelete,
+  onDuplicate,
   onOpen,
 }: {
   folder: FolderWithCount
   onEdit: () => void
   onDelete: () => void
+  onDuplicate: () => void
   onOpen: () => void
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
   const count = folder._count?.events ?? 0
   const { fillColor, folderSymbol } = parseFolderMeta(folder.visualStyle)
   const iconSize = resolveSymbolSize(folderSymbol?.size)
   const SymIcon = folderSymbol?.icon ? SYMBOL_ICONS[folderSymbol.icon as SymbolIconName] : null
+
+  async function handleDuplicate() {
+    if (duplicating) return
+    setDuplicating(true)
+    try {
+      await onDuplicate()
+    } finally {
+      setDuplicating(false)
+    }
+  }
 
   return (
     <div
@@ -196,6 +209,13 @@ function FolderCard({
               className="text-[10px] text-smoke-500 hover:text-smoke-200 border border-smoke-700 hover:border-smoke-500 rounded px-2 py-0.5 transition-colors"
             >
               Edit
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); void handleDuplicate() }}
+              disabled={duplicating}
+              className="text-[10px] text-smoke-500 hover:text-doom-gold border border-smoke-700 hover:border-doom-gold/40 rounded px-2 py-0.5 transition-colors disabled:opacity-40"
+            >
+              {duplicating ? "…" : "Dup"}
             </button>
             <button
               onClick={() => setConfirmDelete(true)}
@@ -310,6 +330,36 @@ export default function FolderManager() {
 
   async function deleteFolder(id: string) {
     await fetch(`/api/folders/${id}`, { method: "DELETE" })
+    await queryClient.invalidateQueries({ queryKey: ["folders"] })
+  }
+
+  async function duplicateFolder(folder: FolderWithCount) {
+    const res = await fetch("/api/folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `${folder.name} (copy)`, visualStyle: folder.visualStyle }),
+    })
+    if (!res.ok) return
+    const newFolder = await res.json() as { id: string }
+
+    const fieldsRes = await fetch(`/api/folder-fields?folderId=${folder.id}`)
+    if (fieldsRes.ok) {
+      const fields = await fieldsRes.json() as ApiFolderField[]
+      for (const field of fields) {
+        await fetch("/api/folder-fields", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            folderId: newFolder.id,
+            name: field.name,
+            fieldType: field.fieldType,
+            options: field.options,
+            order: field.order,
+          }),
+        })
+      }
+    }
+
     await queryClient.invalidateQueries({ queryKey: ["folders"] })
   }
 
@@ -539,6 +589,7 @@ export default function FolderManager() {
                 folder={folder}
                 onEdit={() => setEditingFolder(folder)}
                 onDelete={() => void deleteFolder(folder.id)}
+                onDuplicate={() => duplicateFolder(folder)}
                 onOpen={() => setSelectedFolderId(folder.id)}
               />
             ))}
