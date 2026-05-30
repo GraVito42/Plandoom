@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs"
 import Providers from "@/components/Providers"
+import FontInitializer from "@/components/FontInitializer"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -28,8 +29,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
       <body className="h-screen flex flex-col bg-navy-950 text-smoke-100 overflow-hidden">
-        {/* Apply saved font before React paints to avoid flash */}
-        <script dangerouslySetInnerHTML={{ __html: `try{var f=localStorage.getItem('plandoom_default_font');if(f&&f!=='inherit')document.documentElement.style.fontFamily=f;}catch(e){}` }} />
+        <FontInitializer />
         <ClerkProvider>
           <Providers>
             {/* Topbar globale */}
