@@ -1,5 +1,5 @@
-import FolderManager from "@/components/folders/FolderManager"
+import { redirect } from "next/navigation"
 
 export default function FoldersPage() {
-  return <FolderManager />
+  redirect("/personal?tab=folders")
 }

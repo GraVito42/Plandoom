@@ -75,6 +75,43 @@ export async function PUT(request: Request, { params }: RouteParams) {
   }
 }
 
+export async function PATCH(request: Request, { params }: RouteParams) {
+  try {
+    const user = await ensureUser()
+    const { id } = await params
+
+    const folder = await db.folder.findUnique({ where: { id } })
+    if (!folder || folder.userId !== user.id) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+
+    const body: unknown = await request.json()
+    const { paletteId } = z.object({ paletteId: z.string().nullable() }).parse(body)
+
+    const currentVs = (folder.visualStyle as Record<string, unknown>) ?? {}
+    let updatedVs: Record<string, unknown>
+    if (paletteId !== null) {
+      updatedVs = { ...currentVs, paletteId }
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { paletteId: _removed, ...rest } = currentVs
+      updatedVs = rest
+    }
+
+    const updated = await db.folder.update({
+      where: { id },
+      data: { visualStyle: updatedVs as Prisma.InputJsonValue },
+    })
+
+    return NextResponse.json(updated)
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid data", details: err.issues }, { status: 400 })
+    }
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+}
+
 export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const user = await ensureUser()

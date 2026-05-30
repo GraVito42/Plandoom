@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 
 const NAV_LINKS = [
   { href: "/week", label: "Week" },
-  { href: "/folders", label: "Folders" },
+  { href: "/personal", label: "Personal" },
 ]
 
 export default function NavBar() {
