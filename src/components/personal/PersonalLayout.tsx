@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import ColorPresetsTab from "./tabs/ColorPresetsTab"
 import ShapePresetsSection from "./tabs/ShapePresetsSection"
 import DefaultSettingsTab from "./tabs/DefaultSettingsTab"
+import GlobalGraphicsTab from "./tabs/GlobalGraphicsTab"
 import FolderManager from "@/components/folders/FolderManager"
 
 const TABS = [
@@ -51,7 +52,7 @@ export default function PersonalLayout() {
           </div>
         )}
         {activeTab === "settings" && <DefaultSettingsTab />}
-        {activeTab === "graphics" && <GraphicsPlaceholder />}
+        {activeTab === "graphics" && <GlobalGraphicsTab />}
         {activeTab === "folders" && <FolderManager />}
       </div>
     </div>
@@ -59,6 +60,4 @@ export default function PersonalLayout() {
 }
 
 
-function GraphicsPlaceholder() {
-  return <p className="text-xs text-smoke-500">Global Graphics — coming soon</p>
-}
+

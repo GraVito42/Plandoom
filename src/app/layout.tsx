@@ -28,6 +28,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
       <body className="h-screen flex flex-col bg-navy-950 text-smoke-100 overflow-hidden">
+        {/* Apply saved font before React paints to avoid flash */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var f=localStorage.getItem('plandoom_default_font');if(f&&f!=='inherit')document.documentElement.style.fontFamily=f;}catch(e){}` }} />
         <ClerkProvider>
           <Providers>
             {/* Topbar globale */}
