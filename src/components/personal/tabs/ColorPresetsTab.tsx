@@ -1,59 +1,70 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Pencil, Trash2, Plus, X } from "lucide-react"
 import type { ApiPalette, ApiFolder } from "@/types"
 
 const MAX_COLORS = 12
+const ACTIVE_PALETTE_KEY = "plandoom_active_palette"
+const FALLBACK_COLORS = ["#050818", "#0f2044", "#162d5e", "#2a4d96", "#c9a84c", "#d1d5db", "#9ca3af", "#484e55"]
 
-// ── PaletteCard ───────────────────────────────────────────────────────────────
+// ── SwatchBar ─────────────────────────────────────────────────────────────────
 
-function PaletteCard({
-  palette,
-  linkedFolder,
-  onEdit,
-  onDelete,
-}: {
-  palette: ApiPalette
-  linkedFolder: ApiFolder | undefined
-  onEdit: () => void
-  onDelete: () => void
-}) {
+function SwatchBar({ colors }: { colors: string[] }) {
+  const shown = colors.slice(0, MAX_COLORS)
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border border-smoke-700 bg-smoke-900/40 hover:border-smoke-600 transition-colors">
-      <div className="flex gap-0.5 flex-shrink-0 flex-wrap max-w-[120px]">
-        {palette.colors.slice(0, 8).map((c, i) => (
-          <div key={i} className="w-4 h-4 rounded-sm border border-smoke-800" style={{ background: c }} />
-        ))}
-        {palette.colors.length > 8 && (
-          <div className="w-4 h-4 rounded-sm bg-smoke-800 flex items-center justify-center text-[7px] text-smoke-400">
-            +{palette.colors.length - 8}
-          </div>
-        )}
-      </div>
+    <div className="flex gap-px flex-shrink-0">
+      {shown.map((c, i) => (
+        <div
+          key={i}
+          className="w-5 h-5"
+          style={{
+            background: c,
+            borderRadius:
+              shown.length === 1
+                ? "3px"
+                : i === 0
+                  ? "3px 0 0 3px"
+                  : i === shown.length - 1
+                    ? "0 3px 3px 0"
+                    : undefined,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-smoke-200 truncate">{palette.name}</div>
-        {linkedFolder && (
-          <div className="text-[10px] text-smoke-500 truncate mt-0.5">📁 {linkedFolder.name}</div>
-        )}
-      </div>
+// ── DefaultRow ────────────────────────────────────────────────────────────────
 
-      <div className="flex gap-1 flex-shrink-0">
-        <button
-          onClick={onEdit}
-          className="p-1.5 text-smoke-500 hover:text-smoke-200 transition-colors rounded hover:bg-smoke-800"
-        >
-          <Pencil size={12} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1.5 text-smoke-500 hover:text-doom-ember transition-colors rounded hover:bg-smoke-800"
-        >
-          <Trash2 size={12} />
-        </button>
+function DefaultRow({ palettes }: { palettes: ApiPalette[] }) {
+  const [activePaletteId, setActivePaletteId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const read = () => setActivePaletteId(localStorage.getItem(ACTIVE_PALETTE_KEY))
+    read()
+    window.addEventListener("storage", read)
+    window.addEventListener("plandoom:active-palette-changed", read)
+    return () => {
+      window.removeEventListener("storage", read)
+      window.removeEventListener("plandoom:active-palette-changed", read)
+    }
+  }, [])
+
+  const active = palettes.find((p) => p.id === activePaletteId) ?? palettes[0] ?? null
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-doom-gold/30 bg-navy-800/60">
+      <span className="text-[10px] font-semibold text-doom-gold uppercase tracking-widest w-28 shrink-0">
+        Default
+      </span>
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <SwatchBar colors={active ? active.colors : FALLBACK_COLORS} />
+        {active && (
+          <span className="text-[10px] text-smoke-500 truncate">{active.name}</span>
+        )}
       </div>
     </div>
   )
@@ -61,11 +72,7 @@ function PaletteCard({
 
 // ── PaletteForm ───────────────────────────────────────────────────────────────
 
-type PaletteFormData = {
-  name: string
-  colors: string[]
-  linkedFolderId: string | null
-}
+type PaletteFormData = { name: string; colors: string[]; linkedFolderId: string | null }
 
 function PaletteForm({
   initial,
@@ -115,18 +122,21 @@ function PaletteForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-4 p-4 border border-smoke-700 rounded-lg bg-navy-900/60"
+      className="flex flex-col gap-3 p-3 border border-smoke-700 rounded-lg bg-navy-900/60"
     >
       {/* Name */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] text-smoke-500 uppercase tracking-wider">Name</label>
+      <div className="flex items-center gap-3">
+        <label className="text-[10px] text-smoke-500 uppercase tracking-wider w-14 shrink-0">
+          Name
+        </label>
         <input
+          autoFocus
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="My palette"
           maxLength={100}
-          className="bg-smoke-800 border border-smoke-600 rounded px-2.5 py-1.5 text-xs text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:border-doom-gold/50"
+          className="flex-1 bg-smoke-800 border border-smoke-600 rounded px-2.5 py-1.5 text-xs text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:border-doom-gold/50"
         />
       </div>
 
@@ -134,9 +144,7 @@ function PaletteForm({
       <div className="flex flex-col gap-2">
         <label className="text-[10px] text-smoke-500 uppercase tracking-wider">
           Colors{" "}
-          <span className="text-smoke-600 normal-case">
-            ({colors.length}/{MAX_COLORS})
-          </span>
+          <span className="text-smoke-600 normal-case">({colors.length}/{MAX_COLORS})</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {colors.map((c, i) => (
@@ -156,7 +164,7 @@ function PaletteForm({
                 value={c}
                 onChange={(e) => updateColor(i, e.target.value)}
                 maxLength={7}
-                className="w-[4.5rem] bg-transparent text-[10px] text-smoke-300 focus:outline-none font-mono"
+                className="w-16 bg-transparent text-[10px] text-smoke-300 focus:outline-none font-mono"
               />
               {colors.length > 1 && (
                 <button
@@ -183,12 +191,14 @@ function PaletteForm({
       </div>
 
       {/* Folder link */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] text-smoke-500 uppercase tracking-wider">Link to folder</label>
+      <div className="flex items-center gap-3">
+        <label className="text-[10px] text-smoke-500 uppercase tracking-wider w-14 shrink-0">
+          Folder
+        </label>
         <select
           value={linkedFolderId ?? ""}
           onChange={(e) => setLinkedFolderId(e.target.value || null)}
-          className="bg-smoke-800 border border-smoke-600 rounded px-2.5 py-1.5 text-xs text-smoke-100 focus:outline-none focus:border-doom-gold/50"
+          className="flex-1 bg-smoke-800 border border-smoke-600 rounded px-2.5 py-1.5 text-xs text-smoke-100 focus:outline-none focus:border-doom-gold/50"
         >
           <option value="">None</option>
           {folders.map((f) => (
@@ -200,7 +210,7 @@ function PaletteForm({
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 justify-end">
+      <div className="flex gap-2 justify-end pt-1">
         <button
           type="button"
           onClick={onCancel}
@@ -220,12 +230,61 @@ function PaletteForm({
   )
 }
 
+// ── PaletteRow ────────────────────────────────────────────────────────────────
+
+function PaletteRow({
+  palette,
+  linkedFolder,
+  isEditing,
+  onEdit,
+  onDelete,
+}: {
+  palette: ApiPalette
+  linkedFolder: ApiFolder | undefined
+  isEditing: boolean
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
+        isEditing
+          ? "border-doom-gold/40 bg-navy-800/40"
+          : "border-smoke-700 bg-smoke-900/30 hover:border-smoke-600"
+      }`}
+    >
+      <span className="text-xs text-smoke-200 w-28 shrink-0 truncate" title={palette.name}>
+        {palette.name}
+      </span>
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <SwatchBar colors={palette.colors} />
+        {linkedFolder && (
+          <span className="text-[10px] text-smoke-600 truncate">📁 {linkedFolder.name}</span>
+        )}
+      </div>
+      <div className="flex gap-0.5 shrink-0">
+        <button
+          onClick={onEdit}
+          className="p-1.5 text-smoke-500 hover:text-smoke-200 rounded hover:bg-smoke-800 transition-colors"
+        >
+          <Pencil size={12} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1.5 text-smoke-500 hover:text-doom-ember rounded hover:bg-smoke-800 transition-colors"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── ColorPresetsTab ───────────────────────────────────────────────────────────
 
 export default function ColorPresetsTab() {
   const queryClient = useQueryClient()
-  const [mode, setMode] = useState<"idle" | "creating" | "editing">("idle")
-  const [editTarget, setEditTarget] = useState<ApiPalette | null>(null)
+  const [editingId, setEditingId] = useState<string | "new" | null>(null)
 
   const { data: palettes = [], isLoading } = useQuery<ApiPalette[]>({
     queryKey: ["palettes"],
@@ -261,7 +320,7 @@ export default function ColorPresetsTab() {
   }
 
   async function handleSave(data: PaletteFormData) {
-    if (mode === "creating") {
+    if (editingId === "new") {
       const res = await fetch("/api/palettes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -271,24 +330,21 @@ export default function ColorPresetsTab() {
         const newPalette = (await res.json()) as ApiPalette
         await patchFolderPaletteId(data.linkedFolderId, newPalette.id)
       }
-    } else if (mode === "editing" && editTarget) {
-      await fetch(`/api/palettes/${editTarget.id}`, {
+    } else if (editingId) {
+      await fetch(`/api/palettes/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: data.name, colors: data.colors }),
       })
-
-      const oldFolderId = linkedFolder(editTarget.id)?.id ?? null
+      const oldFolderId = linkedFolder(editingId)?.id ?? null
       if (oldFolderId !== data.linkedFolderId) {
         if (oldFolderId) await patchFolderPaletteId(oldFolderId, null)
-        if (data.linkedFolderId) await patchFolderPaletteId(data.linkedFolderId, editTarget.id)
+        if (data.linkedFolderId) await patchFolderPaletteId(data.linkedFolderId, editingId)
       }
     }
-
     await queryClient.invalidateQueries({ queryKey: ["palettes"] })
     await queryClient.invalidateQueries({ queryKey: ["folders"] })
-    setMode("idle")
-    setEditTarget(null)
+    setEditingId(null)
   }
 
   async function handleDelete(palette: ApiPalette) {
@@ -297,73 +353,76 @@ export default function ColorPresetsTab() {
     await fetch(`/api/palettes/${palette.id}`, { method: "DELETE" })
     await queryClient.invalidateQueries({ queryKey: ["palettes"] })
     await queryClient.invalidateQueries({ queryKey: ["folders"] })
+    if (editingId === palette.id) setEditingId(null)
   }
-
-  function startEdit(palette: ApiPalette) {
-    setEditTarget(palette)
-    setMode("editing")
-  }
-
-  function cancel() {
-    setMode("idle")
-    setEditTarget(null)
-  }
-
-  const formInitial: PaletteFormData =
-    mode === "editing" && editTarget
-      ? {
-          name: editTarget.name,
-          colors: editTarget.colors,
-          linkedFolderId: linkedFolder(editTarget.id)?.id ?? null,
-        }
-      : { name: "", colors: ["#c9a84c"], linkedFolderId: null }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-smoke-100">Color Palettes</h2>
-          <p className="text-[10px] text-smoke-500 mt-0.5">Named color sets for quick styling</p>
-        </div>
-        {mode === "idle" && (
-          <button
-            onClick={() => setMode("creating")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-navy-700 hover:bg-navy-600 text-smoke-100 rounded transition-colors"
-          >
-            <Plus size={12} />
-            New Palette
-          </button>
-        )}
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2 className="text-sm font-semibold text-smoke-100">Color Palettes</h2>
+        <p className="text-[10px] text-smoke-500 mt-0.5">Named color sets for quick styling</p>
       </div>
 
-      {mode !== "idle" && (
-        <PaletteForm
-          key={editTarget?.id ?? "new"}
-          initial={formInitial}
-          folders={folders}
-          onSave={handleSave}
-          onCancel={cancel}
-        />
-      )}
+      {/* DEFAULT row */}
+      <DefaultRow palettes={palettes} />
 
+      <div className="border-t border-smoke-800" />
+
+      {/* Palette list */}
       {isLoading ? (
         <p className="text-xs text-smoke-500">Loading…</p>
-      ) : palettes.length === 0 ? (
-        <p className="text-xs text-smoke-500 py-6 text-center">
-          No palettes yet. Create your first one above.
-        </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
+          {palettes.length === 0 && editingId !== "new" && (
+            <p className="text-xs text-smoke-500 py-3 text-center">No palettes yet.</p>
+          )}
+
           {palettes.map((p) => (
-            <PaletteCard
-              key={p.id}
-              palette={p}
-              linkedFolder={linkedFolder(p.id)}
-              onEdit={() => startEdit(p)}
-              onDelete={() => handleDelete(p)}
-            />
+            <div key={p.id} className="flex flex-col gap-1.5">
+              <PaletteRow
+                palette={p}
+                linkedFolder={linkedFolder(p.id)}
+                isEditing={editingId === p.id}
+                onEdit={() => setEditingId(editingId === p.id ? null : p.id)}
+                onDelete={() => handleDelete(p)}
+              />
+              {editingId === p.id && (
+                <PaletteForm
+                  key={p.id}
+                  initial={{
+                    name: p.name,
+                    colors: p.colors,
+                    linkedFolderId: linkedFolder(p.id)?.id ?? null,
+                  }}
+                  folders={folders}
+                  onSave={handleSave}
+                  onCancel={() => setEditingId(null)}
+                />
+              )}
+            </div>
           ))}
+
+          {editingId === "new" && (
+            <PaletteForm
+              key="new"
+              initial={{ name: "", colors: ["#c9a84c"], linkedFolderId: null }}
+              folders={folders}
+              onSave={handleSave}
+              onCancel={() => setEditingId(null)}
+            />
+          )}
         </div>
+      )}
+
+      {/* Add button — bottom, hidden while creating */}
+      {editingId !== "new" && (
+        <button
+          onClick={() => setEditingId("new")}
+          className="flex items-center gap-1.5 self-start px-3 py-1.5 text-xs text-smoke-400 hover:text-smoke-200 border border-dashed border-smoke-700 hover:border-smoke-500 rounded transition-colors mt-1"
+        >
+          <Plus size={12} />
+          Add Palette
+        </button>
       )}
     </div>
   )

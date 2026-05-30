@@ -53,6 +53,7 @@ export default function GlobalGraphicsTab() {
     } else {
       localStorage.removeItem(PALETTE_LS_KEY)
     }
+    window.dispatchEvent(new CustomEvent("plandoom:active-palette-changed"))
   }
 
   const activePalette = palettes.find((p) => p.id === activePaletteId)
