@@ -1,11 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useQuery } from "@tanstack/react-query"
-import type { ApiPalette } from "@/types"
 
 const FONT_LS_KEY = "plandoom_default_font"
-const PALETTE_LS_KEY = "plandoom_active_palette"
 
 const FONTS = [
   { label: "Default (Geist)", value: "inherit" },
@@ -18,22 +15,10 @@ const FONTS = [
 
 export default function GlobalGraphicsTab() {
   const [font, setFont] = useState("inherit")
-  const [activePaletteId, setActivePaletteId] = useState<string | null>(null)
-
-  const { data: palettes = [] } = useQuery<ApiPalette[]>({
-    queryKey: ["palettes"],
-    queryFn: async () => {
-      const res = await fetch("/api/palettes")
-      if (!res.ok) throw new Error("Failed to load palettes")
-      return res.json() as Promise<ApiPalette[]>
-    },
-  })
 
   useEffect(() => {
     const savedFont = localStorage.getItem(FONT_LS_KEY)
     if (savedFont) setFont(savedFont)
-    const savedPalette = localStorage.getItem(PALETTE_LS_KEY)
-    if (savedPalette) setActivePaletteId(savedPalette)
   }, [])
 
   function handleFontChange(value: string) {
@@ -45,18 +30,6 @@ export default function GlobalGraphicsTab() {
       document.documentElement.style.fontFamily = value
     }
   }
-
-  function handlePaletteChange(id: string | null) {
-    setActivePaletteId(id)
-    if (id) {
-      localStorage.setItem(PALETTE_LS_KEY, id)
-    } else {
-      localStorage.removeItem(PALETTE_LS_KEY)
-    }
-    window.dispatchEvent(new CustomEvent("plandoom:active-palette-changed"))
-  }
-
-  const activePalette = palettes.find((p) => p.id === activePaletteId)
 
   return (
     <div className="flex flex-col gap-8">
@@ -80,46 +53,6 @@ export default function GlobalGraphicsTab() {
           ))}
         </select>
         <p className="text-[10px] text-smoke-600">Applied immediately — persists across sessions</p>
-      </div>
-
-      {/* Active palette */}
-      <div className="flex flex-col gap-3">
-        <label className="text-[10px] text-smoke-500 uppercase tracking-wider">Active Palette</label>
-        {palettes.length === 0 ? (
-          <p className="text-xs text-smoke-600">
-            No palettes saved yet. Create one in the Presets tab.
-          </p>
-        ) : (
-          <>
-            <select
-              value={activePaletteId ?? ""}
-              onChange={(e) => handlePaletteChange(e.target.value || null)}
-              className="bg-smoke-800 border border-smoke-600 rounded px-2.5 py-1.5 text-xs text-smoke-100 focus:outline-none focus:border-doom-gold/50"
-            >
-              <option value="">None</option>
-              {palettes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            {activePalette && (
-              <div className="flex flex-wrap gap-0.5">
-                {activePalette.colors.map((c, i) => (
-                  <div
-                    key={i}
-                    className="w-5 h-5 rounded-sm border border-smoke-800"
-                    style={{ background: c }}
-                    title={c}
-                  />
-                ))}
-              </div>
-            )}
-            <p className="text-[10px] text-smoke-600">
-              Shown as quick-pick swatches in the Style editor
-            </p>
-          </>
-        )}
       </div>
 
       {/* Theme — disabled until light mode is designed */}

@@ -2,14 +2,17 @@
 
 import { useState, useRef, useEffect } from "react"
 import type React from "react"
+import { useQuery } from "@tanstack/react-query"
 import {
   Briefcase, Star, Heart, Flame, Zap, BookOpen, Tag, Flag,
   Home, Music, Camera, Coffee, Leaf, Globe, Shield, Bell,
 } from "lucide-react"
-import type { VisualStyle, FolderSymbol } from "@/types"
+import type { VisualStyle, FolderSymbol, ApiPalette } from "@/types"
 import PolygonEditor from "./PolygonEditor"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
+
+const ACTIVE_PALETTE_KEY = "plandoom_active_palette"
 
 // ── Folder symbol icon registry ───────────────────────────────────────────────
 
@@ -345,10 +348,13 @@ function ColorInput({
 interface ColourPresetsPanelProps {
   activeColor: string
   onApply: (color: string) => void
+  prioritySwatches?: string[]
 }
 
-function ColourPresetsPanel({ activeColor, onApply }: ColourPresetsPanelProps) {
+function ColourPresetsPanel({ activeColor, onApply, prioritySwatches }: ColourPresetsPanelProps) {
   const [presets, setPresets] = useState<string[]>(() => loadPresets())
+  const isPaletteMode = !!prioritySwatches
+  const swatches = isPaletteMode ? prioritySwatches : presets
 
   function addPreset() {
     if (!activeColor || activeColor === "transparent") return
@@ -377,23 +383,27 @@ function ColourPresetsPanel({ activeColor, onApply }: ColourPresetsPanelProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Presets</span>
-        <button
-          type="button"
-          onClick={addPreset}
-          disabled={
-            !activeColor ||
-            activeColor === "transparent" ||
-            presets.includes(activeColor) ||
-            presets.length >= MAX_PRESETS
-          }
-          title="Save active colour as preset"
-          className="text-sm text-doom-gold hover:text-doom-gold/80 disabled:opacity-30 transition-colors leading-none px-1"
-        >
-          +
-        </button>
+        <span className="text-[10px] text-smoke-500 uppercase tracking-wider">
+          {isPaletteMode ? "Palette" : "Presets"}
+        </span>
+        {!isPaletteMode && (
+          <button
+            type="button"
+            onClick={addPreset}
+            disabled={
+              !activeColor ||
+              activeColor === "transparent" ||
+              presets.includes(activeColor) ||
+              presets.length >= MAX_PRESETS
+            }
+            title="Save active colour as preset"
+            className="text-sm text-doom-gold hover:text-doom-gold/80 disabled:opacity-30 transition-colors leading-none px-1"
+          >
+            +
+          </button>
+        )}
       </div>
-      {presets.length === 0 ? (
+      {!isPaletteMode && presets.length === 0 ? (
         <button
           type="button"
           onClick={resetDefaults}
@@ -403,8 +413,8 @@ function ColourPresetsPanel({ activeColor, onApply }: ColourPresetsPanelProps) {
         </button>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          {presets.map((c, i) => (
-            <div key={i} className="relative group">
+          {swatches.map((c, i) => (
+            <div key={i} className={isPaletteMode ? "" : "relative group"}>
               <button
                 type="button"
                 onClick={() => onApply(c)}
@@ -416,13 +426,15 @@ function ColourPresetsPanel({ activeColor, onApply }: ColourPresetsPanelProps) {
                   outlineOffset: activeColor === c ? "2px" : "0",
                 }}
               />
-              <button
-                type="button"
-                onClick={() => deletePreset(i)}
-                className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-smoke-700 text-smoke-400 hover:bg-doom-ember hover:text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[8px] leading-none"
-              >
-                ×
-              </button>
+              {!isPaletteMode && (
+                <button
+                  type="button"
+                  onClick={() => deletePreset(i)}
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-smoke-700 text-smoke-400 hover:bg-doom-ember hover:text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[8px] leading-none"
+                >
+                  ×
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -658,14 +670,41 @@ interface StyleTabProps {
   // Optional: only passed when editing a folder's default style
   folderSymbol?: FolderSymbol | null
   onFolderSymbol?: (sym: FolderSymbol | null) => void
+  // Optional: colours from folder palette (FIX 3); takes priority over active palette
+  prioritySwatches?: string[]
 }
 
 type ActiveColorField = "fillColor" | "frameColor" | "sideColor" | "textColor"
 
-export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFolderSymbol }: StyleTabProps) {
+export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFolderSymbol, prioritySwatches }: StyleTabProps) {
   const previewH = Math.max(PX_PER_HOUR * 0.5, Math.min(PX_PER_HOUR * 4, durationPx))
   const [activeField, setActiveField] = useState<ActiveColorField>("fillColor")
   const activeColor = vs[activeField]
+
+  // Legge la palette attiva da localStorage e la mantiene in sync
+  const [activePaletteId, setActivePaletteId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null
+    return localStorage.getItem(ACTIVE_PALETTE_KEY)
+  })
+
+  useEffect(() => {
+    const handler = () => setActivePaletteId(localStorage.getItem(ACTIVE_PALETTE_KEY))
+    window.addEventListener("plandoom:active-palette-changed", handler)
+    return () => window.removeEventListener("plandoom:active-palette-changed", handler)
+  }, [])
+
+  const { data: palettes = [] } = useQuery<ApiPalette[]>({
+    queryKey: ["palettes"],
+    queryFn: async () => {
+      const res = await fetch("/api/palettes")
+      if (!res.ok) throw new Error("Failed to load palettes")
+      return res.json() as Promise<ApiPalette[]>
+    },
+  })
+
+  // Gerarchia: prioritySwatches (folder) > palette attiva (localStorage) > plandoom_color_presets
+  const activePaletteSwatches = palettes.find((p) => p.id === activePaletteId)?.colors
+  const effectiveSwatches = prioritySwatches ?? activePaletteSwatches
 
   function applyPreset(color: string) {
     onChange({ [activeField]: color } as Partial<VisualStyle>)
@@ -675,8 +714,8 @@ export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFol
     <div className="flex flex-col gap-5 py-1">
       <EventPreview vs={vs} previewH={previewH} folderSymbol={folderSymbol} />
 
-      {/* Colour presets */}
-      <ColourPresetsPanel activeColor={activeColor} onApply={applyPreset} />
+      {/* Colour presets / palette */}
+      <ColourPresetsPanel activeColor={activeColor} onApply={applyPreset} prioritySwatches={effectiveSwatches} />
 
       {/* Folder symbol — only in folder style context */}
       {onFolderSymbol !== undefined && (
