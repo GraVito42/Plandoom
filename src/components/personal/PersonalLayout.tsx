@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter } from "next/navigation"
 import ColorPresetsTab from "./tabs/ColorPresetsTab"
+import ShapePresetsSection from "./tabs/ShapePresetsSection"
 import FolderManager from "@/components/folders/FolderManager"
 
 const TABS = [
@@ -41,7 +42,13 @@ export default function PersonalLayout() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 max-w-3xl">
-        {activeTab === "presets" && <ColorPresetsTab />}
+        {activeTab === "presets" && (
+          <div className="flex flex-col gap-10">
+            <ColorPresetsTab />
+            <hr className="border-smoke-800" />
+            <ShapePresetsSection />
+          </div>
+        )}
         {activeTab === "settings" && <SettingsPlaceholder />}
         {activeTab === "graphics" && <GraphicsPlaceholder />}
         {activeTab === "folders" && <FolderManager />}
