@@ -2,17 +2,14 @@
 
 import { useState, useRef, useEffect } from "react"
 import type React from "react"
-import { useQuery } from "@tanstack/react-query"
 import {
   Briefcase, Star, Heart, Flame, Zap, BookOpen, Tag, Flag,
   Home, Music, Camera, Coffee, Leaf, Globe, Shield, Bell,
 } from "lucide-react"
-import type { VisualStyle, FolderSymbol, ApiPalette } from "@/types"
+import type { VisualStyle, FolderSymbol } from "@/types"
 import PolygonEditor from "./PolygonEditor"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
-
-const DEFAULT_PALETTE_KEY = "plandoom_default_palette"
 
 // ── Folder symbol icon registry ───────────────────────────────────────────────
 
@@ -353,6 +350,13 @@ interface ColourPresetsPanelProps {
 
 function ColourPresetsPanel({ activeColor, onApply, prioritySwatches }: ColourPresetsPanelProps) {
   const [presets, setPresets] = useState<string[]>(() => loadPresets())
+
+  useEffect(() => {
+    const reload = () => setPresets(loadPresets())
+    window.addEventListener("plandoom:presets-changed", reload)
+    return () => window.removeEventListener("plandoom:presets-changed", reload)
+  }, [])
+
   const isPaletteMode = !!prioritySwatches
   const swatches = isPaletteMode ? prioritySwatches : presets
 
@@ -681,31 +685,6 @@ export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFol
   const [activeField, setActiveField] = useState<ActiveColorField>("fillColor")
   const activeColor = vs[activeField]
 
-  // Legge la palette di default da localStorage e la mantiene in sync
-  const [defaultPaletteId, setDefaultPaletteId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null
-    return localStorage.getItem(DEFAULT_PALETTE_KEY)
-  })
-
-  useEffect(() => {
-    const handler = () => setDefaultPaletteId(localStorage.getItem(DEFAULT_PALETTE_KEY))
-    window.addEventListener("plandoom:default-palette-changed", handler)
-    return () => window.removeEventListener("plandoom:default-palette-changed", handler)
-  }, [])
-
-  const { data: palettes = [] } = useQuery<ApiPalette[]>({
-    queryKey: ["palettes"],
-    queryFn: async () => {
-      const res = await fetch("/api/palettes")
-      if (!res.ok) throw new Error("Failed to load palettes")
-      return res.json() as Promise<ApiPalette[]>
-    },
-  })
-
-  // Gerarchia: prioritySwatches (folder) > palette di default > plandoom_color_presets
-  const defaultPaletteSwatches = palettes.find((p) => p.id === defaultPaletteId)?.colors
-  const effectiveSwatches = prioritySwatches ?? defaultPaletteSwatches
-
   function applyPreset(color: string) {
     onChange({ [activeField]: color } as Partial<VisualStyle>)
   }
@@ -714,8 +693,8 @@ export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFol
     <div className="flex flex-col gap-5 py-1">
       <EventPreview vs={vs} previewH={previewH} folderSymbol={folderSymbol} />
 
-      {/* Colour presets / palette */}
-      <ColourPresetsPanel activeColor={activeColor} onApply={applyPreset} prioritySwatches={effectiveSwatches} />
+      {/* Gerarchia: prioritySwatches (folder palette) > plandoom_color_presets */}
+      <ColourPresetsPanel activeColor={activeColor} onApply={applyPreset} prioritySwatches={prioritySwatches} />
 
       {/* Folder symbol — only in folder style context */}
       {onFolderSymbol !== undefined && (
