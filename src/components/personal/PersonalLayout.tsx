@@ -10,8 +10,8 @@ import FolderManager from "@/components/folders/FolderManager"
 const TABS = [
   { id: "presets", label: "Presets" },
   { id: "settings", label: "Default Settings" },
-  { id: "graphics", label: "Global Graphics" },
   { id: "folders", label: "Folders" },
+  { id: "graphics", label: "Global Graphics" },
 ] as const
 
 type TabId = (typeof TABS)[number]["id"]
@@ -52,8 +52,8 @@ export default function PersonalLayout() {
           </div>
         )}
         {activeTab === "settings" && <DefaultSettingsTab />}
-        {activeTab === "graphics" && <GlobalGraphicsTab />}
         {activeTab === "folders" && <FolderManager />}
+        {activeTab === "graphics" && <GlobalGraphicsTab />}
       </div>
     </div>
   )

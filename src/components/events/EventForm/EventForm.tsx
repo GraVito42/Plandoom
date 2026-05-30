@@ -32,6 +32,15 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   leftOffset: 0,
 }
 
+function loadDefaultStyle(): VisualStyle {
+  if (typeof window === "undefined") return DEFAULT_VISUAL_STYLE
+  try {
+    const raw = localStorage.getItem("plandoom_default_event_style")
+    if (raw) return parseVisualStyle(JSON.parse(raw) as unknown)
+  } catch { /* ignore */ }
+  return DEFAULT_VISUAL_STYLE
+}
+
 function parseVisualStyle(raw: unknown): VisualStyle {
   if (!raw || typeof raw !== "object") return DEFAULT_VISUAL_STYLE
   const r = raw as Record<string, unknown>
@@ -138,7 +147,7 @@ function initDraft(
     locationUrl: "",
     repetition: null,
     folderId: prefillFolderId ?? "",
-    visualStyle: DEFAULT_VISUAL_STYLE,
+    visualStyle: loadDefaultStyle(),
     isExternalLinked: false,
     mentalEnergy: 50,
     physicalEnergy: 50,

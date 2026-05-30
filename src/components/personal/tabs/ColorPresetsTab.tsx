@@ -39,7 +39,21 @@ function SwatchBar({ colors }: { colors: string[] }) {
 
 // ── DefaultRow ────────────────────────────────────────────────────────────────
 
-function DefaultRow({ palettes }: { palettes: ApiPalette[] }) {
+function DefaultRow({
+  palettes,
+  folders,
+  isEditing,
+  onEdit,
+  onSave,
+  onCancel,
+}: {
+  palettes: ApiPalette[]
+  folders: ApiFolder[]
+  isEditing: boolean
+  onEdit: () => void
+  onSave: (data: PaletteFormData) => Promise<void>
+  onCancel: () => void
+}) {
   const [activePaletteId, setActivePaletteId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -56,16 +70,43 @@ function DefaultRow({ palettes }: { palettes: ApiPalette[] }) {
   const active = palettes.find((p) => p.id === activePaletteId) ?? palettes[0] ?? null
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-doom-gold/30 bg-navy-800/60">
-      <span className="text-[10px] font-semibold text-doom-gold uppercase tracking-widest w-28 shrink-0">
-        Default
-      </span>
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <SwatchBar colors={active ? active.colors : FALLBACK_COLORS} />
-        {active && (
-          <span className="text-[10px] text-smoke-500 truncate">{active.name}</span>
-        )}
+    <div className="flex flex-col gap-1.5">
+      <div
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
+          isEditing
+            ? "border-doom-gold/60 bg-navy-800/60"
+            : "border-doom-gold/30 bg-navy-800/60"
+        }`}
+      >
+        <span className="text-[10px] font-semibold text-doom-gold uppercase tracking-widest w-28 shrink-0">
+          Default
+        </span>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <SwatchBar colors={active ? active.colors : FALLBACK_COLORS} />
+          {active && (
+            <span className="text-[10px] text-smoke-500 truncate">{active.name}</span>
+          )}
+        </div>
+        <button
+          onClick={onEdit}
+          className="p-1.5 text-smoke-500 hover:text-smoke-200 rounded hover:bg-smoke-800 transition-colors shrink-0"
+        >
+          <Pencil size={12} />
+        </button>
       </div>
+      {isEditing && (
+        <PaletteForm
+          key="default"
+          initial={{
+            name: active?.name ?? "Default",
+            colors: active ? active.colors : FALLBACK_COLORS,
+            linkedFolderId: null,
+          }}
+          folders={folders}
+          onSave={onSave}
+          onCancel={onCancel}
+        />
+      )}
     </div>
   )
 }
@@ -284,7 +325,7 @@ function PaletteRow({
 
 export default function ColorPresetsTab() {
   const queryClient = useQueryClient()
-  const [editingId, setEditingId] = useState<string | "new" | null>(null)
+  const [editingId, setEditingId] = useState<string | "new" | "default" | null>(null)
 
   const { data: palettes = [], isLoading } = useQuery<ApiPalette[]>({
     queryKey: ["palettes"],
@@ -317,6 +358,30 @@ export default function ColorPresetsTab() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paletteId }),
     })
+  }
+
+  async function handleDefaultSave(data: PaletteFormData) {
+    const activePaletteId = localStorage.getItem(ACTIVE_PALETTE_KEY)
+    if (activePaletteId) {
+      await fetch(`/api/palettes/${activePaletteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: data.name, colors: data.colors }),
+      })
+    } else {
+      const res = await fetch("/api/palettes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: data.name, type: "personal", colors: data.colors }),
+      })
+      if (res.ok) {
+        const newPalette = (await res.json()) as ApiPalette
+        localStorage.setItem(ACTIVE_PALETTE_KEY, newPalette.id)
+        window.dispatchEvent(new CustomEvent("plandoom:active-palette-changed"))
+      }
+    }
+    await queryClient.invalidateQueries({ queryKey: ["palettes"] })
+    setEditingId(null)
   }
 
   async function handleSave(data: PaletteFormData) {
@@ -364,7 +429,14 @@ export default function ColorPresetsTab() {
       </div>
 
       {/* DEFAULT row */}
-      <DefaultRow palettes={palettes} />
+      <DefaultRow
+        palettes={palettes}
+        folders={folders}
+        isEditing={editingId === "default"}
+        onEdit={() => setEditingId(editingId === "default" ? null : "default")}
+        onSave={handleDefaultSave}
+        onCancel={() => setEditingId(null)}
+      />
 
       <div className="border-t border-smoke-800" />
 
