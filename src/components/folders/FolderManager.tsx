@@ -173,7 +173,7 @@ function FolderCard({
       )}
 
       {/* Name */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div className={`flex items-center gap-2.5 min-w-0 ${folderSymbol ? "pr-8" : ""}`}>
         {folder.icon && (
           <span className="text-base leading-none shrink-0">{folder.icon}</span>
         )}
@@ -582,7 +582,7 @@ export default function FolderManager() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
             {folders.map(folder => (
               <FolderCard
                 key={folder.id}

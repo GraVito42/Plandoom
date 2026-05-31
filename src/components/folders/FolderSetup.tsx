@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import type { VisualStyle, FolderSymbol, ApiFolderField } from "@/types"
+import type { VisualStyle, FolderSymbol, ApiFolderField, ApiPalette } from "@/types"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import StyleTab from "@/components/events/EventForm/tabs/StyleTab"
 
@@ -16,7 +16,7 @@ type DraftField = {
   newOption: string
 }
 
-type ActiveTab = "details" | "style" | "fields"
+type ActiveTab = "details" | "style" | "palette" | "fields"
 
 type FolderLike = {
   id: string
@@ -56,6 +56,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 const TABS: { id: ActiveTab; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "style", label: "Style" },
+  { id: "palette", label: "Palette" },
   { id: "fields", label: "Fields" },
 ]
 
@@ -255,7 +256,20 @@ export default function FolderSetup({ folderToEdit, onClose }: FolderSetupProps)
   const [folderSymbol, setFolderSymbol] = useState<FolderSymbol | null>(
     isEdit ? parseFolderSymbol(folderToEdit?.visualStyle) : null
   )
+  const [draftPaletteId, setDraftPaletteId] = useState<string | null>(() => {
+    if (!isEdit || !folderToEdit?.visualStyle) return null
+    const vs = folderToEdit.visualStyle as Record<string, unknown>
+    return typeof vs.paletteId === "string" ? vs.paletteId : null
+  })
   const [fields, setFields] = useState<DraftField[]>([])
+
+  const { data: palettes = [] } = useQuery<ApiPalette[]>({
+    queryKey: ["palettes"],
+    queryFn: async () => {
+      const res = await fetch("/api/palettes")
+      return res.json() as Promise<ApiPalette[]>
+    },
+  })
   const [saving, setSaving] = useState(false)
 
   // Create-mode field helpers
@@ -292,9 +306,7 @@ export default function FolderSetup({ folderToEdit, onClose }: FolderSetupProps)
     if (!name.trim()) return
     setSaving(true)
     try {
-      const vsWithSymbol = folderSymbol
-        ? { ...visualStyle, folderSymbol }
-        : { ...visualStyle, folderSymbol: null }
+      const vsWithSymbol = { ...visualStyle, folderSymbol: folderSymbol ?? null, paletteId: draftPaletteId }
 
       if (isEdit && folderToEdit) {
         await fetch(`/api/folders/${folderToEdit.id}`, {
@@ -419,6 +431,55 @@ export default function FolderSetup({ folderToEdit, onClose }: FolderSetupProps)
               folderSymbol={folderSymbol}
               onFolderSymbol={setFolderSymbol}
             />
+          )}
+
+          {/* Palette tab */}
+          {activeTab === "palette" && (
+            <div className="flex flex-col gap-3">
+              <p className="text-[10px] text-smoke-500">
+                Choose a palette to use as default swatches when styling events in this folder.
+              </p>
+
+              {palettes.length === 0 ? (
+                <p className="text-xs text-smoke-500 py-3 text-center">
+                  No palettes yet. Create one in Personal → Presets.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDraftPaletteId(null)}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-left transition-colors ${
+                      draftPaletteId === null
+                        ? "border-doom-gold/40 bg-navy-800/40 text-doom-gold"
+                        : "border-smoke-700 bg-smoke-900/30 text-smoke-400 hover:border-smoke-600"
+                    }`}
+                  >
+                    <span className="text-xs">None</span>
+                  </button>
+
+                  {palettes.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setDraftPaletteId(draftPaletteId === p.id ? null : p.id)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-left transition-colors ${
+                        draftPaletteId === p.id
+                          ? "border-doom-gold/40 bg-navy-800/40"
+                          : "border-smoke-700 bg-smoke-900/30 hover:border-smoke-600"
+                      }`}
+                    >
+                      <span className="text-xs text-smoke-200 w-24 shrink-0 truncate">{p.name}</span>
+                      <div className="flex gap-px">
+                        {p.colors.slice(0, 12).map((c, i) => (
+                          <div key={i} className="w-4 h-4 rounded-sm" style={{ background: c }} />
+                        ))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Fields tab */}

@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs"
 import Providers from "@/components/Providers"
+import FontInitializer from "@/components/FontInitializer"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -28,6 +29,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
       <body className="h-screen flex flex-col bg-navy-950 text-smoke-100 overflow-hidden">
+        <FontInitializer />
         <ClerkProvider>
           <Providers>
             {/* Topbar globale */}

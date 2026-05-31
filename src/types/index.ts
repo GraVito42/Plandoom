@@ -95,6 +95,16 @@ export type ApiEvent = {
   updatedAt: string
 }
 
+export type ApiPalette = {
+  id: string
+  name: string
+  userId: string
+  type: string
+  colors: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export type ApiChip = {
   id: string
   title: string

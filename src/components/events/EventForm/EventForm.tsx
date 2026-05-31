@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useRef } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import type { ApiEvent, VisualStyle, RepetitionConfig } from "@/types"
+import type { ApiEvent, VisualStyle, RepetitionConfig, ApiFolder, ApiPalette } from "@/types"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import StyleTab from "./tabs/StyleTab"
 import ContentTab from "./tabs/ContentTab"
@@ -30,6 +31,15 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   textPosition: null,
   widthPercent: 100,
   leftOffset: 0,
+}
+
+function loadDefaultStyle(): VisualStyle {
+  if (typeof window === "undefined") return DEFAULT_VISUAL_STYLE
+  try {
+    const raw = localStorage.getItem("plandoom_default_event_style")
+    if (raw) return parseVisualStyle(JSON.parse(raw) as unknown)
+  } catch { /* ignore */ }
+  return DEFAULT_VISUAL_STYLE
 }
 
 function parseVisualStyle(raw: unknown): VisualStyle {
@@ -138,7 +148,7 @@ function initDraft(
     locationUrl: "",
     repetition: null,
     folderId: prefillFolderId ?? "",
-    visualStyle: DEFAULT_VISUAL_STYLE,
+    visualStyle: loadDefaultStyle(),
     isExternalLinked: false,
     mentalEnergy: 50,
     physicalEnergy: 50,
@@ -270,6 +280,34 @@ export default function EventForm({
   const [deleting, setDeleting] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [folderStylePending, setFolderStylePending] = useState<VisualStyle | null>(null)
+
+  const { data: folders = [] } = useQuery<ApiFolder[]>({
+    queryKey: ["folders"],
+    queryFn: async () => {
+      const res = await fetch("/api/folders")
+      if (!res.ok) throw new Error("Failed to load folders")
+      return res.json() as Promise<ApiFolder[]>
+    },
+  })
+
+  const { data: palettes = [] } = useQuery<ApiPalette[]>({
+    queryKey: ["palettes"],
+    queryFn: async () => {
+      const res = await fetch("/api/palettes")
+      if (!res.ok) throw new Error("Failed to load palettes")
+      return res.json() as Promise<ApiPalette[]>
+    },
+  })
+
+  // Se il folder dell'evento ha una palette associata, la passa a StyleTab come priorità
+  const folderPaletteSwatches = (() => {
+    if (!draft.folderId) return undefined
+    const folder = folders.find((f) => f.id === draft.folderId)
+    const vs = folder?.visualStyle as Record<string, unknown> | null | undefined
+    const paletteId = vs?.paletteId as string | undefined
+    if (!paletteId) return undefined
+    return palettes.find((p) => p.id === paletteId)?.colors
+  })()
 
   // Track the last folderId to distinguish first selection vs folder change
   const prevFolderIdRef = useRef<string>(eventToEdit?.folderId ?? prefillFolderId ?? "")
@@ -523,7 +561,14 @@ export default function EventForm({
 
           {/* Left — Style */}
           <div className={`min-h-0 ${styleOpen ? "overflow-y-auto px-4 py-3" : "overflow-hidden"}`}>
-            {styleOpen && <StyleTab vs={draft.visualStyle} onChange={patchVS} durationPx={durationPx} />}
+            {styleOpen && (
+              <StyleTab
+                vs={draft.visualStyle}
+                onChange={patchVS}
+                durationPx={durationPx}
+                prioritySwatches={folderPaletteSwatches}
+              />
+            )}
           </div>
 
           {/* Center — Content or active Golem panel */}
