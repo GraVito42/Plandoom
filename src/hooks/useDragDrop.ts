@@ -10,13 +10,9 @@ function snap15(minutes: number): number {
   return Math.round(minutes / 15) * 15
 }
 
-function extractChipStyle(visualStyle: unknown): {
-  shape: string; frameColor: string; frameWidth: number
-  sideColor: string; sideWidth: number
-  fillColor: string; fillOpacity: number; textColor: string
-} {
+function extractChipStyle(visualStyle: unknown): Record<string, unknown> {
   const vs = visualStyle as Record<string, unknown> | null | undefined
-  return {
+  const style: Record<string, unknown> = {
     shape: typeof vs?.shape === "string" ? vs.shape : "rounded",
     frameColor: typeof vs?.frameColor === "string" ? vs.frameColor : "transparent",
     frameWidth: typeof vs?.frameWidth === "number" ? vs.frameWidth : 1,
@@ -25,7 +21,19 @@ function extractChipStyle(visualStyle: unknown): {
     fillColor: typeof vs?.fillColor === "string" ? vs.fillColor : "#162d5e",
     fillOpacity: typeof vs?.fillOpacity === "number" ? vs.fillOpacity : 100,
     textColor: typeof vs?.textColor === "string" ? vs.textColor : "#d1d5db",
+    eventType: typeof vs?.eventType === "string" ? vs.eventType : "default",
+    fontFamily: typeof vs?.fontFamily === "string" ? vs.fontFamily : "inherit",
+    hasCheckbox: typeof vs?.hasCheckbox === "boolean" ? vs.hasCheckbox : false,
+    isChecked: typeof vs?.isChecked === "boolean" ? vs.isChecked : false,
+    shapeSmoothing: typeof vs?.shapeSmoothing === "number" ? vs.shapeSmoothing : 0,
+    widthPercent: typeof vs?.widthPercent === "number" ? vs.widthPercent : 100,
+    leftOffset: typeof vs?.leftOffset === "number" ? vs.leftOffset : 0,
   }
+  if (typeof vs?.shapePath === "string") style.shapePath = vs.shapePath
+  else style.shapePath = null
+  if (vs?.textPosition && typeof vs.textPosition === "object") style.textPosition = vs.textPosition
+  else style.textPosition = null
+  return style
 }
 
 export function useDragDrop(events: ApiEvent[]) {
@@ -74,7 +82,7 @@ export function useDragDrop(events: ApiEvent[]) {
         const [year, month, day] = dateStr.split("-").map(Number)
         const dayTarget = new Date(year, month - 1, day, 12, 0, 0, 0).toISOString()
         const durationMin = Math.round((new Date(event.endTime).getTime() - new Date(event.startTime).getTime()) / 60000)
-        const { shape, frameColor, frameWidth, sideColor, sideWidth, fillColor, fillOpacity, textColor } = extractChipStyle(event.visualStyle)
+        const visualStyle = extractChipStyle(event.visualStyle)
         await fetch("/api/chips", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -87,13 +95,11 @@ export function useDragDrop(events: ApiEvent[]) {
             ...(event.folderId && { folderId: event.folderId }),
             ...(event.location && { location: event.location }),
             ...(event.locationUrl && { locationUrl: event.locationUrl }),
-            visualStyle: {
-              shape, frameColor, frameWidth,
-              sideColor, sideWidth,
-              fillColor, fillOpacity,
-              textColor, eventType: "default",
-              fontFamily: "inherit", hasCheckbox: false, isChecked: false,
-            },
+            visualStyle,
+            ...(event.mentalEnergy != null && { mentalEnergy: event.mentalEnergy }),
+            ...(event.physicalEnergy != null && { physicalEnergy: event.physicalEnergy }),
+            ...(event.difficulty != null && { difficulty: event.difficulty }),
+            ...(event.folderFieldValues != null ? { folderFieldValues: event.folderFieldValues } : {}),
           }),
         })
         await fetch(`/api/events/${eventId}`, { method: "DELETE" })
@@ -111,7 +117,7 @@ export function useDragDrop(events: ApiEvent[]) {
         const chipYear = Number(parts[0])
         const chipWeekNumber = Number(parts[1])
         const durationMin = Math.round((new Date(event.endTime).getTime() - new Date(event.startTime).getTime()) / 60000)
-        const { shape, frameColor, frameWidth, sideColor, sideWidth, fillColor, fillOpacity, textColor } = extractChipStyle(event.visualStyle)
+        const visualStyle = extractChipStyle(event.visualStyle)
         await fetch("/api/chips", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -125,13 +131,11 @@ export function useDragDrop(events: ApiEvent[]) {
             ...(event.folderId && { folderId: event.folderId }),
             ...(event.location && { location: event.location }),
             ...(event.locationUrl && { locationUrl: event.locationUrl }),
-            visualStyle: {
-              shape, frameColor, frameWidth,
-              sideColor, sideWidth,
-              fillColor, fillOpacity,
-              textColor, eventType: "default",
-              fontFamily: "inherit", hasCheckbox: false, isChecked: false,
-            },
+            visualStyle,
+            ...(event.mentalEnergy != null && { mentalEnergy: event.mentalEnergy }),
+            ...(event.physicalEnergy != null && { physicalEnergy: event.physicalEnergy }),
+            ...(event.difficulty != null && { difficulty: event.difficulty }),
+            ...(event.folderFieldValues != null ? { folderFieldValues: event.folderFieldValues } : {}),
           }),
         })
         await fetch(`/api/events/${eventId}`, { method: "DELETE" })

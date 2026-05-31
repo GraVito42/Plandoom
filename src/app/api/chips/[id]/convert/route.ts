@@ -26,10 +26,6 @@ export async function POST(
     const body: unknown = await request.json()
     const data = convertSchema.parse(body)
 
-    const vs = chip.visualStyle as Record<string, unknown> | null | undefined
-    const fillColor = typeof vs?.fillColor === "string" ? vs.fillColor : "#162d5e"
-    const fillOpacity = typeof vs?.fillOpacity === "number" ? vs.fillOpacity : 100
-
     const [event] = await db.$transaction([
       db.event.create({
         data: {
@@ -41,7 +37,11 @@ export async function POST(
           folderId: chip.folderId,
           location: chip.location ?? undefined,
           locationUrl: chip.locationUrl ?? undefined,
-          visualStyle: { fillColor, fillOpacity } as unknown as Prisma.InputJsonValue,
+          visualStyle: chip.visualStyle as Prisma.InputJsonValue ?? undefined,
+          mentalEnergy: chip.mentalEnergy,
+          physicalEnergy: chip.physicalEnergy,
+          difficulty: chip.difficulty,
+          folderFieldValues: chip.folderFieldValues as Prisma.InputJsonValue ?? undefined,
           userId: user.id,
           source: "plandoom",
         },
