@@ -10,11 +10,21 @@ function snap15(minutes: number): number {
   return Math.round(minutes / 15) * 15
 }
 
-function extractFill(visualStyle: unknown): { fillColor: string; fillOpacity: number } {
+function extractChipStyle(visualStyle: unknown): {
+  shape: string; frameColor: string; frameWidth: number
+  sideColor: string; sideWidth: number
+  fillColor: string; fillOpacity: number; textColor: string
+} {
   const vs = visualStyle as Record<string, unknown> | null | undefined
   return {
+    shape: typeof vs?.shape === "string" ? vs.shape : "rounded",
+    frameColor: typeof vs?.frameColor === "string" ? vs.frameColor : "transparent",
+    frameWidth: typeof vs?.frameWidth === "number" ? vs.frameWidth : 1,
+    sideColor: typeof vs?.sideColor === "string" ? vs.sideColor : "#c9a84c",
+    sideWidth: typeof vs?.sideWidth === "number" ? vs.sideWidth : 2,
     fillColor: typeof vs?.fillColor === "string" ? vs.fillColor : "#162d5e",
     fillOpacity: typeof vs?.fillOpacity === "number" ? vs.fillOpacity : 100,
+    textColor: typeof vs?.textColor === "string" ? vs.textColor : "#d1d5db",
   }
 }
 
@@ -64,7 +74,7 @@ export function useDragDrop(events: ApiEvent[]) {
         const [year, month, day] = dateStr.split("-").map(Number)
         const dayTarget = new Date(year, month - 1, day, 12, 0, 0, 0).toISOString()
         const durationMin = Math.round((new Date(event.endTime).getTime() - new Date(event.startTime).getTime()) / 60000)
-        const { fillColor, fillOpacity } = extractFill(event.visualStyle)
+        const { shape, frameColor, frameWidth, sideColor, sideWidth, fillColor, fillOpacity, textColor } = extractChipStyle(event.visualStyle)
         await fetch("/api/chips", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -78,10 +88,10 @@ export function useDragDrop(events: ApiEvent[]) {
             ...(event.location && { location: event.location }),
             ...(event.locationUrl && { locationUrl: event.locationUrl }),
             visualStyle: {
-              shape: "rounded", frameColor: "transparent", frameWidth: 1,
-              sideColor: "#c9a84c", sideWidth: 2,
+              shape, frameColor, frameWidth,
+              sideColor, sideWidth,
               fillColor, fillOpacity,
-              textColor: "#d1d5db", eventType: "default",
+              textColor, eventType: "default",
               fontFamily: "inherit", hasCheckbox: false, isChecked: false,
             },
           }),
@@ -101,7 +111,7 @@ export function useDragDrop(events: ApiEvent[]) {
         const chipYear = Number(parts[0])
         const chipWeekNumber = Number(parts[1])
         const durationMin = Math.round((new Date(event.endTime).getTime() - new Date(event.startTime).getTime()) / 60000)
-        const { fillColor, fillOpacity } = extractFill(event.visualStyle)
+        const { shape, frameColor, frameWidth, sideColor, sideWidth, fillColor, fillOpacity, textColor } = extractChipStyle(event.visualStyle)
         await fetch("/api/chips", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -116,10 +126,10 @@ export function useDragDrop(events: ApiEvent[]) {
             ...(event.location && { location: event.location }),
             ...(event.locationUrl && { locationUrl: event.locationUrl }),
             visualStyle: {
-              shape: "rounded", frameColor: "transparent", frameWidth: 1,
-              sideColor: "#c9a84c", sideWidth: 2,
+              shape, frameColor, frameWidth,
+              sideColor, sideWidth,
               fillColor, fillOpacity,
-              textColor: "#d1d5db", eventType: "default",
+              textColor, eventType: "default",
               fontFamily: "inherit", hasCheckbox: false, isChecked: false,
             },
           }),

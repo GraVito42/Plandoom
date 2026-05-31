@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import type React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Pencil, Trash2, Plus, X } from "lucide-react"
+import { Pencil, Trash2, Plus, X, Copy } from "lucide-react"
 import type { ApiPalette, ApiFolder } from "@/types"
 
 const MAX_COLORS = 12
@@ -203,16 +203,14 @@ function DefaultRow({
 
 // ── PaletteForm ───────────────────────────────────────────────────────────────
 
-type PaletteFormData = { name: string; colors: string[]; linkedFolderId: string | null }
+type PaletteFormData = { name: string; colors: string[] }
 
 function PaletteForm({
   initial,
-  folders,
   onSave,
   onCancel,
 }: {
   initial: PaletteFormData
-  folders: ApiFolder[]
   onSave: (data: PaletteFormData) => Promise<void>
   onCancel: () => void
 }) {
@@ -220,7 +218,6 @@ function PaletteForm({
   const [colors, setColors] = useState<string[]>(
     initial.colors.length > 0 ? initial.colors : ["#c9a84c"]
   )
-  const [linkedFolderId, setLinkedFolderId] = useState<string | null>(initial.linkedFolderId)
   const [saving, setSaving] = useState(false)
 
   function addColor() {
@@ -244,7 +241,7 @@ function PaletteForm({
     if (!name.trim()) return
     setSaving(true)
     try {
-      await onSave({ name: name.trim(), colors, linkedFolderId })
+      await onSave({ name: name.trim(), colors })
     } finally {
       setSaving(false)
     }
@@ -321,25 +318,6 @@ function PaletteForm({
         </div>
       </div>
 
-      {/* Folder link */}
-      <div className="flex items-center gap-3">
-        <label className="text-[10px] text-smoke-500 uppercase tracking-wider w-14 shrink-0">
-          Folder
-        </label>
-        <select
-          value={linkedFolderId ?? ""}
-          onChange={(e) => setLinkedFolderId(e.target.value || null)}
-          className="flex-1 bg-smoke-800 border border-smoke-600 rounded px-2.5 py-1.5 text-xs text-smoke-100 focus:outline-none focus:border-doom-gold/50"
-        >
-          <option value="">None</option>
-          {folders.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Actions */}
       <div className="flex gap-2 justify-end pt-1">
         <button
@@ -369,12 +347,14 @@ function PaletteRow({
   isEditing,
   onEdit,
   onDelete,
+  onDuplicate,
 }: {
   palette: ApiPalette
   linkedFolder: ApiFolder | undefined
   isEditing: boolean
   onEdit: () => void
   onDelete: () => void
+  onDuplicate: () => void
 }) {
   return (
     <div
@@ -399,6 +379,13 @@ function PaletteRow({
           className="p-1.5 text-smoke-500 hover:text-smoke-200 rounded hover:bg-smoke-800 transition-colors"
         >
           <Pencil size={12} />
+        </button>
+        <button
+          onClick={onDuplicate}
+          className="p-1.5 text-smoke-500 hover:text-smoke-200 rounded hover:bg-smoke-800 transition-colors"
+          title="Duplicate"
+        >
+          <Copy size={12} />
         </button>
         <button
           onClick={onDelete}
@@ -452,30 +439,29 @@ export default function ColorPresetsTab() {
 
   async function handleSave(data: PaletteFormData) {
     if (editingId === "new") {
-      const res = await fetch("/api/palettes", {
+      await fetch("/api/palettes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: data.name, type: "personal", colors: data.colors }),
       })
-      if (res.ok && data.linkedFolderId) {
-        const newPalette = (await res.json()) as ApiPalette
-        await patchFolderPaletteId(data.linkedFolderId, newPalette.id)
-      }
     } else if (editingId) {
       await fetch(`/api/palettes/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: data.name, colors: data.colors }),
       })
-      const oldFolderId = linkedFolder(editingId)?.id ?? null
-      if (oldFolderId !== data.linkedFolderId) {
-        if (oldFolderId) await patchFolderPaletteId(oldFolderId, null)
-        if (data.linkedFolderId) await patchFolderPaletteId(data.linkedFolderId, editingId)
-      }
     }
     await queryClient.invalidateQueries({ queryKey: ["palettes"] })
-    await queryClient.invalidateQueries({ queryKey: ["folders"] })
     setEditingId(null)
+  }
+
+  async function handleDuplicate(palette: ApiPalette) {
+    await fetch("/api/palettes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `${palette.name} (copy)`, type: "personal", colors: palette.colors }),
+    })
+    await queryClient.invalidateQueries({ queryKey: ["palettes"] })
   }
 
   async function handleDelete(palette: ApiPalette) {
@@ -519,17 +505,13 @@ export default function ColorPresetsTab() {
                 linkedFolder={linkedFolder(p.id)}
                 isEditing={editingId === p.id}
                 onEdit={() => setEditingId(editingId === p.id ? null : p.id)}
-                onDelete={() => handleDelete(p)}
+                onDelete={() => void handleDelete(p)}
+                onDuplicate={() => void handleDuplicate(p)}
               />
               {editingId === p.id && (
                 <PaletteForm
                   key={p.id}
-                  initial={{
-                    name: p.name,
-                    colors: p.colors,
-                    linkedFolderId: linkedFolder(p.id)?.id ?? null,
-                  }}
-                  folders={folders}
+                  initial={{ name: p.name, colors: p.colors }}
                   onSave={handleSave}
                   onCancel={() => setEditingId(null)}
                 />
@@ -540,8 +522,7 @@ export default function ColorPresetsTab() {
           {editingId === "new" && (
             <PaletteForm
               key="new"
-              initial={{ name: "", colors: ["#c9a84c"], linkedFolderId: null }}
-              folders={folders}
+              initial={{ name: "", colors: ["#c9a84c"] }}
               onSave={handleSave}
               onCancel={() => setEditingId(null)}
             />
