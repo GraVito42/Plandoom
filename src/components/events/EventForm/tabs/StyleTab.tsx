@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import type React from "react"
+import { useQuery } from "@tanstack/react-query"
 import {
   Briefcase, Star, Heart, Flame, Zap, BookOpen, Tag, Flag,
   Home, Music, Camera, Coffee, Leaf, Globe, Shield, Bell,
@@ -680,10 +681,26 @@ interface StyleTabProps {
 
 type ActiveColorField = "fillColor" | "frameColor" | "sideColor" | "textColor"
 
+type GlobalPreset = {
+  id: string
+  name: string
+  visualStyle: { path: string; smoothing?: number; fillColor?: string; frameColor?: string }
+}
+
 export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFolderSymbol, prioritySwatches }: StyleTabProps) {
   const previewH = Math.max(PX_PER_HOUR * 0.5, Math.min(PX_PER_HOUR * 4, durationPx))
   const [activeField, setActiveField] = useState<ActiveColorField>("fillColor")
   const activeColor = vs[activeField]
+
+  const { data: globalPresets } = useQuery<GlobalPreset[]>({
+    queryKey: ["shape-presets-global"],
+    queryFn: async () => {
+      const r = await fetch("/api/shape-presets")
+      if (!r.ok) throw new Error("fetch failed")
+      return r.json() as Promise<GlobalPreset[]>
+    },
+    staleTime: 5 * 60 * 1000,
+  })
 
   function applyPreset(color: string) {
     onChange({ [activeField]: color } as Partial<VisualStyle>)
@@ -770,6 +787,7 @@ export default function StyleTab({ vs, onChange, durationPx, folderSymbol, onFol
         onWidthPercent={(v) => onChange({ widthPercent: v })}
         leftOffset={vs.leftOffset}
         onLeftOffset={(v) => onChange({ leftOffset: v })}
+        globalPresets={globalPresets}
         folderSymbolPosition={onFolderSymbol ? (folderSymbol?.position ?? null) : undefined}
         onFolderSymbolPosition={onFolderSymbol
           ? (pos) => onFolderSymbol(

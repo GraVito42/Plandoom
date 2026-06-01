@@ -340,8 +340,9 @@ export default function ShapePresetsSection() {
         <p className="text-[10px] text-smoke-500 mt-0.5">Custom polygon shapes for event blocks</p>
       </div>
 
+      {/* Personal presets */}
       {presets.length === 0 && editingId !== "new" && (
-        <p className="text-xs text-smoke-500 py-4 text-center">No shapes saved yet.</p>
+        <p className="text-xs text-smoke-500 py-4 text-center">No personal shapes saved yet.</p>
       )}
 
       <div className="flex flex-col gap-1.5">
