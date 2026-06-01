@@ -55,6 +55,12 @@ const BUILT_IN_PRESETS: BuiltInPreset[] = [
 
 type UserPreset = { id: string; name: string; path: string }
 
+type GlobalPreset = {
+  id: string
+  name: string
+  visualStyle: { path: string; smoothing?: number; fillColor?: string; frameColor?: string }
+}
+
 function loadUserPresets(): UserPreset[] {
   try {
     const raw = localStorage.getItem(LS_KEY)
@@ -70,8 +76,8 @@ function persistUserPresets(presets: UserPreset[]) {
 
 // ── Thumbnail SVG ─────────────────────────────────────────────────────────────
 
-function ShapeThumbnail({ pts }: { pts: Point[] }) {
-  const d = pts.length >= 3 ? smoothedPath(pts, 0) : ""
+function ShapeThumbnail({ pts, smoothing = 0 }: { pts: Point[]; smoothing?: number }) {
+  const d = pts.length >= 3 ? smoothedPath(pts, smoothing) : ""
   if (!d) return <div className="w-9 h-6 rounded bg-smoke-700 shrink-0" />
   return (
     <svg
@@ -112,7 +118,9 @@ interface PolygonEditorProps {
   onFolderSymbolPosition?: (pos: { x: number; y: number } | null) => void
   folderSymbolIcon?: string | null
   folderSymbolImage?: string | null
-  // When true, hides internal user-preset list and "Save as preset" button
+  // Global presets from DB (shown read-only before personal presets)
+  globalPresets?: GlobalPreset[]
+  // When true, hides global + personal preset lists and "Save as preset" button
   hidePresets?: boolean
 }
 
@@ -132,6 +140,7 @@ export default function PolygonEditor({
   onFolderSymbolPosition,
   folderSymbolIcon,
   folderSymbolImage,
+  globalPresets,
   hidePresets = false,
 }: PolygonEditorProps) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -403,8 +412,25 @@ export default function PolygonEditor({
             <span className="text-xs text-smoke-300">{preset.name}</span>
           </button>
         ))}
+        {!hidePresets && (globalPresets ?? []).length > 0 && (
+          <div className="border-t border-smoke-800 mt-0.5 pt-0.5">
+            <span className="block px-2 pt-0.5 pb-0.5 text-[9px] text-smoke-600 uppercase tracking-wider">Global</span>
+            {(globalPresets ?? []).map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyUserPreset(preset.visualStyle.path)}
+                className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-smoke-800 transition-colors rounded mx-0.5 w-full"
+              >
+                <ShapeThumbnail pts={pathToPoints(preset.visualStyle.path)} smoothing={preset.visualStyle.smoothing} />
+                <span className="text-xs text-smoke-400">{preset.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {!hidePresets && userPresets.length > 0 && (
           <div className="border-t border-smoke-800 mt-0.5 pt-0.5">
+            <span className="block px-2 pt-0.5 pb-0.5 text-[9px] text-smoke-600 uppercase tracking-wider">Personal</span>
             {userPresets.map((preset) => (
               <div key={preset.id} className="flex items-center mx-0.5">
                 <button
