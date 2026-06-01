@@ -105,6 +105,37 @@ export type ApiPalette = {
   updatedAt: string
 }
 
+export type SeendoBudgetStatus = "active" | "restricted" | "exhausted"
+
+export type SeendoExtractedEvent = {
+  title: string
+  description: string | null
+  date: string | null
+  startTime: string | null
+  endTime: string | null
+}
+
+export type SeendoContextForm = {
+  referenceText: string
+  referencePeriod: "day" | "week" | "month" | "year"
+  referenceUnspecified: boolean
+  timezone: string
+  documentType: string
+  furtherInstructions: string
+}
+
+export type ApiSeendoUpload = {
+  id: string
+  userId: string
+  imageUrl: string
+  documentType: string | null
+  referencePeriod: string | null
+  timezone: string | null
+  extractedEvents: SeendoExtractedEvent[]
+  importedEventIds: string[]
+  createdAt: string
+}
+
 export type ApiChip = {
   id: string
   title: string

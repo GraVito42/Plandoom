@@ -16,11 +16,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  folders      Folder[]
-  events       Event[]
-  chips        Chip[]
-  palettes     Palette[]
-  folderFields FolderField[]
+  folders       Folder[]
+  events        Event[]
+  chips         Chip[]
+  palettes      Palette[]
+  folderFields  FolderField[]
+  seendoUploads SeendoUpload[]
 }
 
 model Folder {
@@ -163,4 +164,17 @@ model ShapePreset {
   name        String
   visualStyle Json     // { path, smoothing, fillColor, frameColor }
   createdAt   DateTime @default(now())
+}
+
+model SeendoUpload {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  imageUrl         String   // URL immagine su storage (placeholder per ora)
+  documentType     String?
+  referencePeriod  String?
+  timezone         String?
+  extractedEvents  Json     // SeendoExtractedEvent[]
+  importedEventIds String[] // ID degli eventi effettivamente importati
+  createdAt        DateTime @default(now())
 }
