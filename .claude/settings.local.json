@@ -33,7 +33,8 @@
       "Bash(npm list *)",
       "Bash(New-Item -ItemType Directory -Force \"src\\\\app\\\\api\\\\me\")",
       "Bash(Out-Null)",
-      "Bash(Write-Host \"ok\")"
+      "Bash(Write-Host \"ok\")",
+      "Bash(git merge *)"
     ]
   }
 }
