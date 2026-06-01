@@ -1,4 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
 import { db } from "./db"
 import type { User } from "@prisma/client"
 
@@ -29,4 +30,16 @@ export async function ensureUser(): Promise<User> {
     create: { clerkId: userId, email, name },
     update: { email, name },
   })
+}
+
+/**
+ * Come ensureUser, ma verifica che il ruolo sia "admin".
+ * Restituisce una NextResponse 403 se non lo è (da ritornare direttamente dalla route).
+ */
+export async function ensureAdmin(): Promise<User | NextResponse> {
+  const user = await ensureUser()
+  if (user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+  return user
 }

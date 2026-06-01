@@ -15,7 +15,25 @@
       "Bash(git pull *)",
       "Bash(git stash *)",
       "PowerShell(Get-Process *)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(curl *)",
+      "Bash(cat prisma/prisma.config.ts)",
+      "Bash(cat prisma.config.ts)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3000)",
+      "Bash(node -e \"const {Prisma} = require\\('@prisma/client'\\); const keys = Object.keys\\(Prisma.EventScalarFieldEnum\\); console.log\\(keys.join\\(', '\\)\\)\")",
+      "Bash(node -e \"const {PrismaPg} = require\\('@prisma/adapter-pg'\\); console.log\\(typeof PrismaPg\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(dir /s /b middleware.ts middleware.js proxy.ts)",
+      "Bash(Select-String -Pattern '\"next\"|\"version\"')",
+      "PowerShell(gh repo *)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('ChevronLeft:', typeof l.ChevronLeft, 'ChevronRight:', typeof l.ChevronRight\\)\")",
+      "Bash(git checkout *)",
+      "Bash(npm install *)",
+      "Bash(npm list *)",
+      "Bash(New-Item -ItemType Directory -Force \"src\\\\app\\\\api\\\\me\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Host \"ok\")"
     ]
   }
 }
