@@ -14,7 +14,7 @@ import { useChips } from "@/hooks/useChips"
 import { useDragDrop } from "@/hooks/useDragDrop"
 import type { ApiEvent, ApiChip, ApiFolder } from "@/types"
 import { getSeendoResetDate } from "@/lib/seendo-budget"
-import { isFullDayEvent } from "@/lib/eventUtils"
+import { isFullDayEvent, parsePillStyle } from "@/lib/eventUtils"
 import DayColumn from "./DayColumn"
 import EventForm from "../events/EventForm/EventForm"
 import ChipArea from "../chips/ChipArea"
@@ -410,21 +410,28 @@ export default function WeekGrid() {
                   ))}
                 </div>
                 {/* Pills */}
-                {fullDayPills.map(({ ev, colStart, colEnd, row }) => (
-                  <div
-                    key={ev.id}
-                    className="absolute rounded-full bg-doom-gold/20 border border-doom-gold/50 text-xs text-doom-gold font-medium truncate px-2 py-0.5 cursor-pointer hover:bg-doom-gold/30 transition-colors z-10"
-                    style={{
-                      left: `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${((colEnd - colStart + 1) / 7) * 100}% - 4px)`,
-                      top: row * 26 + 2,
-                      height: 22,
-                    }}
-                    onClick={() => openEdit(ev)}
-                  >
-                    {ev.title}
-                  </div>
-                ))}
+                {fullDayPills.map(({ ev, colStart, colEnd, row }) => {
+                  const pill = parsePillStyle(ev.visualStyle)
+                  return (
+                    <div
+                      key={ev.id}
+                      className="absolute rounded-full text-xs font-medium truncate px-2 py-0.5 cursor-pointer hover:brightness-110 transition-all z-10"
+                      style={{
+                        left: `calc(${(colStart / 7) * 100}% + 2px)`,
+                        width: `calc(${((colEnd - colStart + 1) / 7) * 100}% - 4px)`,
+                        top: row * 26 + 2,
+                        height: 22,
+                        backgroundColor: pill.backgroundColor,
+                        border: pill.border,
+                        color: pill.color,
+                        fontFamily: pill.fontFamily,
+                      }}
+                      onClick={() => openEdit(ev)}
+                    >
+                      {ev.title}
+                    </div>
+                  )
+                })}
               </div>
             </>
           )}
