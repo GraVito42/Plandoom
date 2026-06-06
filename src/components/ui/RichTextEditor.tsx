@@ -11,6 +11,7 @@ import Link from "@tiptap/extension-link"
 import TextAlign from "@tiptap/extension-text-align"
 import BulletList from "@tiptap/extension-bullet-list"
 import OrderedList from "@tiptap/extension-ordered-list"
+import ListItem from "@tiptap/extension-list-item"
 import {
   Bold,
   Italic,
@@ -35,12 +36,13 @@ interface RichTextEditorProps {
 }
 
 const FONT_FAMILIES = ["Default", "serif", "monospace", "cursive"]
-const COLORS = ["#f3f4f6", "#c9a84c", "#8b3a2a", "#4a2d6b", "#60a5fa", "#34d399", "#f87171", "#fb923c"]
+const TEXT_COLORS = ["#f3f4f6", "#c9a84c", "#8b3a2a", "#4a2d6b", "#60a5fa", "#34d399", "#f87171", "#fb923c"]
+const HIGHLIGHT_COLORS = ["#fef08a", "#86efac", "#93c5fd", "#f9a8d4", "#fdba74", "#d8b4fe"]
 
 export default function RichTextEditor({
   content,
   onChange,
-  placeholder = "Scrivi qui...",
+  placeholder = "Write here...",
   className = "",
 }: RichTextEditorProps) {
   const editor = useEditor({
@@ -55,6 +57,7 @@ export default function RichTextEditor({
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       BulletList,
       OrderedList,
+      ListItem,
     ],
     content: content ?? "",
     onUpdate: ({ editor }) => {
@@ -123,15 +126,42 @@ export default function RichTextEditor({
         >
           <LinkIcon size={12} />
         </ToolBtn>
-        <ToolBtn
-          active={editor.isActive("highlight")}
-          onClick={() => editor.chain().focus().toggleHighlight().run()}
-          title="Highlight"
-        >
-          <Highlighter size={12} />
-        </ToolBtn>
 
-        {/* Color picker */}
+        {/* Highlight color picker */}
+        <div className="relative group">
+          <button
+            className={`p-1 rounded transition-colors ${
+              editor.isActive("highlight")
+                ? "bg-navy-600 text-doom-gold"
+                : "text-smoke-400 hover:text-smoke-100 hover:bg-navy-700"
+            }`}
+            title="Highlight"
+            type="button"
+          >
+            <Highlighter size={12} />
+          </button>
+          <div className="absolute top-full left-0 z-50 hidden group-hover:flex flex-wrap gap-1 bg-navy-800 border border-smoke-700 rounded p-1.5 shadow-xl w-[94px]">
+            {HIGHLIGHT_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="w-4 h-4 rounded-full border border-smoke-600 hover:scale-110 transition-transform"
+                style={{ backgroundColor: c }}
+                onClick={() => editor.chain().focus().setHighlight({ color: c }).run()}
+              />
+            ))}
+            <button
+              type="button"
+              className="w-4 h-4 rounded-full border border-smoke-600 hover:scale-110 transition-transform text-[8px] text-smoke-400 flex items-center justify-center bg-navy-900"
+              onClick={() => editor.chain().focus().unsetHighlight().run()}
+              title="Remove highlight"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Text color picker */}
         <div className="relative group">
           <button
             className="p-1 rounded text-smoke-400 hover:text-smoke-100 hover:bg-navy-700 transition-colors"
@@ -141,7 +171,7 @@ export default function RichTextEditor({
             <Palette size={12} />
           </button>
           <div className="absolute top-full left-0 z-50 hidden group-hover:flex flex-wrap gap-1 bg-navy-800 border border-smoke-700 rounded p-1.5 shadow-xl w-[90px]">
-            {COLORS.map((c) => (
+            {TEXT_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"

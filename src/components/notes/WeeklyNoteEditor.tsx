@@ -1,7 +1,8 @@
 "use client"
 
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useRef, useCallback } from "react"
+import { useRef, useCallback, useState } from "react"
+import { ChevronDown, ChevronUp } from "lucide-react"
 import RichTextEditor from "@/components/ui/RichTextEditor"
 
 interface WeeklyNoteEditorProps {
@@ -16,6 +17,7 @@ export default function WeeklyNoteEditor({ weekStart }: WeeklyNoteEditorProps) {
   const weekStartISO = weekStart.toISOString()
   const queryClient = useQueryClient()
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isVisible, setIsVisible] = useState(true)
 
   const { data } = useQuery<WeeklyNoteResponse>({
     queryKey: ["weeklyNote", weekStartISO],
@@ -44,24 +46,33 @@ export default function WeeklyNoteEditor({ weekStart }: WeeklyNoteEditorProps) {
   const hasContent = !!(data?.content && data.content.replace(/<[^>]*>/g, "").trim())
 
   return (
-    <div
-      className={`bg-navy-900 border border-smoke-700 rounded-lg p-2 mb-3 transition-all ${
-        hasContent ? "max-h-[240px] overflow-y-auto" : "min-h-[48px]"
-      }`}
-    >
-      {hasContent ? (
-        <RichTextEditor
-          content={data?.content ?? null}
-          onChange={handleChange}
-          placeholder="Note settimanali..."
-        />
-      ) : (
-        <RichTextEditor
-          content={null}
-          onChange={handleChange}
-          placeholder="Note settimanali..."
-          className="min-h-[32px]"
-        />
+    <div className="bg-navy-900 border border-smoke-700 rounded-lg mb-3 overflow-hidden transition-all">
+      {/* Header barra con toggle */}
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-smoke-700/60">
+        <span className="text-[10px] font-semibold text-smoke-500 uppercase tracking-widest">
+          Weekly notes
+        </span>
+        <button
+          type="button"
+          onClick={() => setIsVisible((v) => !v)}
+          className="text-smoke-400 hover:text-smoke-200 transition-colors"
+          title={isVisible ? "Collapse" : "Expand"}
+        >
+          {isVisible ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        </button>
+      </div>
+
+      {/* Editor area — visibile solo se isVisible=true */}
+      {isVisible && (
+        <div
+          className={`p-2 ${hasContent ? "max-h-[240px] overflow-y-auto" : "min-h-[48px]"}`}
+        >
+          <RichTextEditor
+            content={data?.content ?? null}
+            onChange={handleChange}
+            placeholder="Weekly notes..."
+          />
+        </div>
       )}
     </div>
   )
