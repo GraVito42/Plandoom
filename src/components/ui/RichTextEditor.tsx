@@ -47,7 +47,7 @@ export default function RichTextEditor({
 }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ bulletList: false, orderedList: false }),
+      StarterKit.configure({ bulletList: false, orderedList: false, listItem: false }),
       Underline,
       Highlight.configure({ multicolor: true }),
       TextStyle,
