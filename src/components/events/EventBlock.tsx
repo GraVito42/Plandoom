@@ -32,6 +32,10 @@ interface EventBlockProps {
   onResizeStart: (clientY: number) => void
   onResizeMove: (clientY: number) => void
   onResizeEnd: () => void
+  splitType?: "start" | "end"
+  overrideStartTime?: Date
+  overrideEndTime?: Date
+  isContinuation?: boolean
 }
 
 function formatTime(date: Date): string {
@@ -130,22 +134,30 @@ export default function EventBlock({
   onResizeStart,
   onResizeMove,
   onResizeEnd,
+  splitType,
+  overrideStartTime,
+  overrideEndTime,
+  isContinuation = false,
 }: EventBlockProps) {
   const queryClient = useQueryClient()
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: event.id,
+    id: isContinuation ? `${event.id}-cont` : event.id,
     data: { type: "event" },
+    disabled: isContinuation,
   })
 
   const start = new Date(event.startTime)
   const end = new Date(event.endTime)
 
-  const minutesFromStart = (start.getHours() - HOUR_START) * 60 + start.getMinutes()
-  const durationMinutes = Math.max(15, (end.getTime() - start.getTime()) / 60_000)
+  const effectiveStart = splitType === "end" && overrideStartTime ? overrideStartTime : start
+  const effectiveEnd = splitType === "start" && overrideEndTime ? overrideEndTime : end
+
+  const minutesFromStart = (effectiveStart.getHours() - HOUR_START) * 60 + effectiveStart.getMinutes()
+  const durationMinutes = Math.max(15, (effectiveEnd.getTime() - effectiveStart.getTime()) / 60_000)
   const top = minutesFromStart * (PX_PER_HOUR / 60)
   const baseHeight = Math.max(24, durationMinutes * (PX_PER_HOUR / 60))
-  const height = Math.max(24, baseHeight + resizeDeltaMinutes * (PX_PER_HOUR / 60))
+  const height = Math.max(24, baseHeight + (isContinuation ? 0 : resizeDeltaMinutes * (PX_PER_HOUR / 60)))
 
   const vs = parseVisualStyle(event.visualStyle)
   const hasCustomShape = !!vs.shapePath
@@ -156,6 +168,14 @@ export default function EventBlock({
   const hasSide = vs.sideWidth > 0 && vs.sideColor !== "transparent"
   const fw = hasFrame ? vs.frameWidth : 0
   const fc = hasFrame ? vs.frameColor : "transparent"
+
+  const splitBorderRadius: React.CSSProperties = hasCustomShape ? {} : (
+    splitType === "start"
+      ? { borderTopLeftRadius: radius, borderTopRightRadius: radius, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }
+      : splitType === "end"
+      ? { borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: radius, borderBottomRightRadius: radius }
+      : { borderRadius: radius }
+  )
 
   const frameStyle: React.CSSProperties = hasCustomShape ? {} : {
     borderTopWidth: fw, borderTopStyle: hasFrame ? "solid" : "none", borderTopColor: fc,
@@ -219,7 +239,7 @@ export default function EventBlock({
         className="relative h-full overflow-hidden hover:brightness-110 transition-all cursor-grab active:cursor-grabbing focus:outline-none focus:ring-1 focus:ring-doom-gold/50 select-none"
         style={{
           backgroundColor: fillWithOpacity(vs.fillColor, vs.fillOpacity),
-          borderRadius: radius,
+          ...splitBorderRadius,
           ...(hasCustomShape && { clipPath: `url(#${clipId})` }),
           ...frameStyle,
         }}
@@ -236,6 +256,14 @@ export default function EventBlock({
                 : `calc(${radius} - ${fw}px) 0 0 calc(${radius} - ${fw}px)`,
             }}
           />
+        )}
+
+        {/* Split continuation indicators */}
+        {splitType === "start" && (
+          <div className="absolute bottom-0.5 right-1 text-[8px] pointer-events-none z-20 opacity-70 leading-none" style={{ color: vs.textColor }}>▶</div>
+        )}
+        {splitType === "end" && (
+          <div className="absolute top-0.5 right-1 text-[8px] pointer-events-none z-20 opacity-70 leading-none" style={{ color: vs.textColor }}>◀</div>
         )}
 
         {/* Map pin */}
@@ -327,7 +355,7 @@ export default function EventBlock({
             )}
             {showTime && (
               <p className="text-[10px] truncate leading-tight opacity-60 mt-0.5">
-                {formatTime(start)} – {formatTime(end)}
+                {formatTime(effectiveStart)} – {formatTime(effectiveEnd)}
               </p>
             )}
           </div>
@@ -372,7 +400,7 @@ export default function EventBlock({
             )}
             {showTime && (
               <p className="text-[10px] truncate leading-tight opacity-60 mt-0.5">
-                {formatTime(start)} – {formatTime(end)}
+                {formatTime(effectiveStart)} – {formatTime(effectiveEnd)}
               </p>
             )}
           </div>
@@ -398,25 +426,27 @@ export default function EventBlock({
         </svg>
       )}
 
-      {/* Resize handle */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-white/10 transition-colors"
-        style={{ borderRadius: `0 0 ${radius} ${radius}` }}
-        onPointerDown={(e) => {
-          e.stopPropagation()
-          e.preventDefault()
-          e.currentTarget.setPointerCapture(e.pointerId)
-          onResizeStart(e.clientY)
-        }}
-        onPointerMove={(e) => {
-          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-          onResizeMove(e.clientY)
-        }}
-        onPointerUp={(e) => {
-          e.currentTarget.releasePointerCapture(e.pointerId)
-          onResizeEnd()
-        }}
-      />
+      {/* Resize handle — not shown on continuation split cards */}
+      {!isContinuation && (
+        <div
+          className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-white/10 transition-colors"
+          style={{ borderRadius: `0 0 ${radius} ${radius}` }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            e.currentTarget.setPointerCapture(e.pointerId)
+            onResizeStart(e.clientY)
+          }}
+          onPointerMove={(e) => {
+            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+            onResizeMove(e.clientY)
+          }}
+          onPointerUp={(e) => {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+            onResizeEnd()
+          }}
+        />
+      )}
     </div>
   )
 }

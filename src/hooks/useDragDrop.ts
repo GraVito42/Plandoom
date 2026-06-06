@@ -10,6 +10,18 @@ function snap15(minutes: number): number {
   return Math.round(minutes / 15) * 15
 }
 
+function clampEventEndTime(
+  endTime: Date,
+  allowMultiDay: boolean,
+  year: number,
+  month: number,
+  day: number,
+): Date {
+  if (allowMultiDay) return endTime
+  const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 0)
+  return endTime > dayEnd ? dayEnd : endTime
+}
+
 function extractChipStyle(visualStyle: unknown): Record<string, unknown> {
   const vs = visualStyle as Record<string, unknown> | null | undefined
   const style: Record<string, unknown> = {
@@ -162,7 +174,8 @@ export function useDragDrop(events: ApiEvent[]) {
         const dayLast  = new Date(year, month - 1, day, 23, 45, 0, 0)
         if (newStart < dayStart) newStart.setTime(dayStart.getTime())
         if (newStart > dayLast)  newStart.setTime(dayLast.getTime())
-        const newEnd = new Date(newStart.getTime() + durationMs)
+        const rawEnd = new Date(newStart.getTime() + durationMs)
+        const newEnd = clampEventEndTime(rawEnd, event.allowMultiDay ?? false, year, month, day)
 
         await fetch(`/api/events/${eventId}`, {
           method: "PUT",

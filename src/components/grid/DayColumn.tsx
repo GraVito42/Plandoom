@@ -10,6 +10,7 @@ interface DayColumnProps {
   date: Date
   hours: number[]
   events: ApiEvent[]
+  continuationEvents?: ApiEvent[]
   isToday: boolean
   resizingEventId: string | null
   resizeDeltaMinutes: number
@@ -27,6 +28,7 @@ export default function DayColumn({
   date,
   hours,
   events,
+  continuationEvents,
   isToday,
   resizingEventId,
   resizeDeltaMinutes,
@@ -101,18 +103,43 @@ export default function DayColumn({
         </div>
       )}
 
-      {events.map((ev) => (
-        <EventBlock
-          key={ev.id}
-          event={ev}
-          folderVisualStyle={folderMap?.[ev.folderId ?? ""]?.visualStyle}
-          resizeDeltaMinutes={resizingEventId === ev.id ? resizeDeltaMinutes : 0}
-          onClick={() => onEventClick(ev)}
-          onResizeStart={(clientY) => onResizeStart(ev.id, clientY)}
-          onResizeMove={(clientY) => onResizeMove(ev.id, clientY)}
-          onResizeEnd={() => onResizeEnd(ev.id)}
-        />
-      ))}
+      {events.map((ev) => {
+        const nextMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0)
+        const isSplitStart = (ev.allowMultiDay ?? false) && new Date(ev.endTime) > nextMidnight
+        return (
+          <EventBlock
+            key={ev.id}
+            event={ev}
+            folderVisualStyle={folderMap?.[ev.folderId ?? ""]?.visualStyle}
+            resizeDeltaMinutes={resizingEventId === ev.id ? resizeDeltaMinutes : 0}
+            onClick={() => onEventClick(ev)}
+            onResizeStart={(clientY) => onResizeStart(ev.id, clientY)}
+            onResizeMove={(clientY) => onResizeMove(ev.id, clientY)}
+            onResizeEnd={() => onResizeEnd(ev.id)}
+            splitType={isSplitStart ? "start" : undefined}
+            overrideEndTime={isSplitStart ? nextMidnight : undefined}
+          />
+        )
+      })}
+
+      {(continuationEvents ?? []).map((ev) => {
+        const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+        return (
+          <EventBlock
+            key={`${ev.id}-cont`}
+            event={ev}
+            folderVisualStyle={folderMap?.[ev.folderId ?? ""]?.visualStyle}
+            resizeDeltaMinutes={0}
+            onClick={() => onEventClick(ev)}
+            onResizeStart={() => {}}
+            onResizeMove={() => {}}
+            onResizeEnd={() => {}}
+            splitType="end"
+            overrideStartTime={dayStart}
+            isContinuation
+          />
+        )
+      })}
     </div>
   )
 }

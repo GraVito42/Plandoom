@@ -114,6 +114,7 @@ model Event {
   difficulty        Int?
   pleasure          Int?
   isFixed           Boolean @default(false)
+  allowMultiDay     Boolean @default(false)
   productivityModel String?
 
   // Campi custom cartella

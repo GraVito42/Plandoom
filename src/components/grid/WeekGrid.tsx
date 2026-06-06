@@ -14,6 +14,7 @@ import { useChips } from "@/hooks/useChips"
 import { useDragDrop } from "@/hooks/useDragDrop"
 import type { ApiEvent, ApiChip, ApiFolder } from "@/types"
 import { getSeendoResetDate } from "@/lib/seendo-budget"
+import { isFullDayEvent } from "@/lib/eventUtils"
 import DayColumn from "./DayColumn"
 import EventForm from "../events/EventForm/EventForm"
 import ChipArea from "../chips/ChipArea"
@@ -60,6 +61,8 @@ export default function WeekGrid() {
   } = useGrid()
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const dayHeaderRef = useRef<HTMLDivElement>(null)
+  const [headerHeight, setHeaderHeight] = useState(0)
   const queryClient = useQueryClient()
 
   const [editor, setEditor] = useState<EditorState>({
@@ -145,6 +148,30 @@ export default function WeekGrid() {
     [folders]
   )
 
+  // Full-day event pills for the band — greedy row assignment
+  const fullDayPills = useMemo(() => {
+    const fd = events.filter(isFullDayEvent)
+    const placed: { ev: ApiEvent; colStart: number; colEnd: number; row: number }[] = []
+    for (const ev of fd) {
+      const s = new Date(ev.startTime)
+      const e = new Date(ev.endTime)
+      const startDiff = Math.floor((s.getTime() - weekStart.getTime()) / 86_400_000)
+      const endDiff = Math.floor((e.getTime() - weekStart.getTime() - 1) / 86_400_000)
+      if (startDiff > 6 || endDiff < 0) continue
+      const colStart = Math.max(0, Math.min(6, startDiff))
+      const colEnd = Math.max(colStart, Math.min(6, endDiff))
+      let row = 0
+      while (placed.some((p) => p.row === row && !(p.colEnd < colStart || p.colStart > colEnd))) {
+        row++
+      }
+      placed.push({ ev, colStart, colEnd, row })
+    }
+    return placed
+  }, [events, weekStart])
+
+  const maxPillRow = fullDayPills.length > 0 ? Math.max(...fullDayPills.map((p) => p.row)) : 0
+  const fdBandHeight = fullDayPills.length > 0 ? Math.max(28, (maxPillRow + 1) * 26 + 4) : 0
+
   // Prefetch delle 7 daily note — così i dot colorati appaiono senza latenza
   useEffect(() => {
     weekDays.forEach((date) => {
@@ -172,13 +199,36 @@ export default function WeekGrid() {
     scrollRef.current.scrollTop = Math.max(0, offset - PX_PER_HOUR)
   }, [])
 
+  // ── Measure header height for sticky full-day band positioning ───────────────
+  useEffect(() => {
+    const el = dayHeaderRef.current
+    if (!el) return
+    const update = () => setHeaderHeight(el.offsetHeight)
+    update()
+    const obs = new ResizeObserver(update)
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+
   // ── Data helpers ─────────────────────────────────────────────────────────────
   function eventsForDay(date: Date): ApiEvent[] {
     return events.filter((ev) => {
+      if (isFullDayEvent(ev)) return false
       const s = new Date(ev.startTime)
       return s.getFullYear() === date.getFullYear() &&
         s.getMonth() === date.getMonth() &&
         s.getDate() === date.getDate()
+    })
+  }
+
+  function continuationEventsForDay(date: Date): ApiEvent[] {
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+    return events.filter((ev) => {
+      if (isFullDayEvent(ev)) return false
+      if (!(ev.allowMultiDay ?? false)) return false
+      const s = new Date(ev.startTime)
+      const e = new Date(ev.endTime)
+      return s < dayStart && e > dayStart
     })
   }
 
@@ -315,7 +365,7 @@ export default function WeekGrid() {
           <div className="sticky top-0 z-40 bg-navy-950 border-r border-b border-smoke-700" />
 
           {/* [0,1] Day headers — sticky top, above events (z-20) */}
-          <div className="sticky top-0 z-30 flex bg-navy-950 border-b border-smoke-700">
+          <div ref={dayHeaderRef} className="sticky top-0 z-30 flex bg-navy-950 border-b border-smoke-700">
             {weekDays.map((date, i) => {
               const today = isToday(date)
               return (
@@ -342,7 +392,44 @@ export default function WeekGrid() {
             })}
           </div>
 
-          {/* [1,0] Hour labels */}
+          {/* [1,0] + [1,1] Full-day band — only rendered when events exist this week */}
+          {fullDayPills.length > 0 && (
+            <>
+              <div
+                className="sticky z-20 bg-navy-950 border-r border-b border-smoke-700"
+                style={{ top: headerHeight }}
+              />
+              <div
+                className="sticky z-20 bg-navy-900 border-b border-smoke-700 relative overflow-hidden"
+                style={{ top: headerHeight, height: fdBandHeight }}
+              >
+                {/* Column dividers */}
+                <div className="absolute inset-0 flex">
+                  {weekDays.map((_, i) => (
+                    <div key={i} className={`flex-1 ${i > 0 ? "border-l border-smoke-700" : ""}`} />
+                  ))}
+                </div>
+                {/* Pills */}
+                {fullDayPills.map(({ ev, colStart, colEnd, row }) => (
+                  <div
+                    key={ev.id}
+                    className="absolute rounded-full bg-doom-gold/20 border border-doom-gold/50 text-xs text-doom-gold font-medium truncate px-2 py-0.5 cursor-pointer hover:bg-doom-gold/30 transition-colors z-10"
+                    style={{
+                      left: `calc(${(colStart / 7) * 100}% + 2px)`,
+                      width: `calc(${((colEnd - colStart + 1) / 7) * 100}% - 4px)`,
+                      top: row * 26 + 2,
+                      height: 22,
+                    }}
+                    onClick={() => openEdit(ev)}
+                  >
+                    {ev.title}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* [2,0] Hour labels */}
           <div className="border-r border-smoke-700 bg-navy-950">
             {hours.map((hour) => (
               <div key={hour} className="h-16 flex items-start justify-end pr-3 pt-1 border-b border-smoke-700/40">
@@ -351,7 +438,7 @@ export default function WeekGrid() {
             ))}
           </div>
 
-          {/* [1,1] Day columns */}
+          {/* [2,1] Day columns */}
           <div className="flex">
             {weekDays.map((date, i) => (
               <DayColumn
@@ -359,6 +446,7 @@ export default function WeekGrid() {
                 date={date}
                 hours={hours}
                 events={eventsForDay(date)}
+                continuationEvents={continuationEventsForDay(date)}
                 isToday={isToday(date)}
                 resizingEventId={resizing?.eventId ?? null}
                 resizeDeltaMinutes={resizing?.deltaMinutes ?? 0}

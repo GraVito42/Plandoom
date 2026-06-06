@@ -91,6 +91,7 @@ export type ApiEvent = {
   difficulty: number | null
   pleasure: number | null
   isFixed: boolean
+  allowMultiDay: boolean
   productivityModel: string | null
   folderFieldValues: unknown
   createdAt: string
