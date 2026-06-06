@@ -22,6 +22,7 @@ import Seendo from "../magic/Seendo"
 import SeendoLogo from "../magic/SeendoLogo"
 import Plando from "../magic/Plando"
 import Glando from "../magic/Glando"
+import DayNotePopover from "../notes/DayNotePopover"
 
 // Chiave localStorage usata in Seendo.tsx per attivare/disattivare la linea
 const LS_SEENDO_RESET_LINE = "plandoom_seendo_reset_line"
@@ -143,6 +144,22 @@ export default function WeekGrid() {
     () => Object.fromEntries(folders.map((f) => [f.id, f])),
     [folders]
   )
+
+  // Prefetch delle 7 daily note — così i dot colorati appaiono senza latenza
+  useEffect(() => {
+    weekDays.forEach((date) => {
+      const dateUTC = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+      const dateISO = dateUTC.toISOString()
+      void queryClient.prefetchQuery({
+        queryKey: ["dailyNote", dateISO],
+        queryFn: async () => {
+          const res = await fetch(`/api/notes/daily?date=${encodeURIComponent(dateISO)}`)
+          if (!res.ok) throw new Error("Failed")
+          return res.json()
+        },
+      })
+    })
+  }, [weekStart.toISOString()]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { chipsForDay } = useChips(weekStart, weekEnd)
   const { activeEvent, activeChip, activeDims } = useDragDrop(events)
@@ -306,14 +323,11 @@ export default function WeekGrid() {
                   key={i}
                   className={`flex-1 flex flex-col border-l border-smoke-700 min-w-0 ${today ? "bg-navy-900/40" : ""}`}
                 >
-                  <div className={`py-2 text-center border-b border-smoke-700 ${today ? "bg-navy-800/60" : ""}`}>
-                    <span className={`text-xs font-semibold tracking-widest uppercase ${today ? "text-doom-gold" : "text-smoke-300"}`}>
-                      {DAY_NAMES[i]}
-                    </span>
-                    <span className={`block text-xs mt-0.5 ${today ? "text-doom-gold/70" : "text-smoke-400"}`}>
-                      {date.getDate()}
-                    </span>
-                  </div>
+                  <DayNotePopover
+                    date={date}
+                    dayLabel={DAY_NAMES[i]}
+                    isToday={today}
+                  />
                   <div className="min-h-20 bg-navy-900/30 px-2 py-1.5">
                     <ChipArea
                       area="daily"
