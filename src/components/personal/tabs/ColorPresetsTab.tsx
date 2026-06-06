@@ -159,12 +159,10 @@ function DefaultRow({
   onEdit: () => void
   onCancel: () => void
 }) {
-  const [colors, setColors] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [...FALLBACK_COLORS]
-    return loadColorPresets()
-  })
+  const [colors, setColors] = useState<string[]>([...FALLBACK_COLORS])
 
   useEffect(() => {
+    setColors(loadColorPresets())
     const read = () => setColors(loadColorPresets())
     window.addEventListener("plandoom:presets-changed", read)
     window.addEventListener("storage", read)

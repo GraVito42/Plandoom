@@ -52,6 +52,8 @@ const createEventSchema = z.object({
   isFixed: z.boolean().default(false),
   productivityModel: z.string().optional(),
   folderFieldValues: z.record(z.string(), z.unknown()).optional(),
+  seendoSourceUploadId: z.string().optional(),
+  seendoImages: z.array(z.string()).optional(),
 })
 
 // ── Occurrence date generation ────────────────────────────────────────────────
@@ -142,6 +144,46 @@ export async function POST(request: Request) {
     const body: unknown = await request.json()
     const data = createEventSchema.parse(body)
 
+    // Risolve lo stile visivo: se il client non ne fornisce uno, usa il default
+    // della folder selezionata (se presente), altrimenti quello personale dell'utente.
+    let resolvedVisualStyle: Prisma.InputJsonValue | undefined =
+      data.visualStyle != null
+        ? (data.visualStyle as unknown as Prisma.InputJsonValue)
+        : undefined
+
+    if (resolvedVisualStyle === undefined) {
+      if (data.folderId) {
+        const folder = await db.folder.findUnique({
+          where: { id: data.folderId },
+          select: { visualStyle: true },
+        })
+        if (folder?.visualStyle != null) {
+          resolvedVisualStyle = folder.visualStyle as Prisma.InputJsonValue
+        }
+      }
+      if (resolvedVisualStyle === undefined && user.defaultVisualStyle != null) {
+        resolvedVisualStyle = user.defaultVisualStyle as Prisma.InputJsonValue
+      }
+    }
+
+    // ── LOG DIAGNOSTICO TEMPORANEO ────────────────────────────────────────────
+    {
+      const dvs = user.defaultVisualStyle
+      const dvsDesc = dvs == null
+        ? "NULL"
+        : (typeof dvs === "object" && !Array.isArray(dvs))
+          ? `object{${Object.keys(dvs as object).slice(0, 4).join(",")}}`
+          : `${typeof dvs}`
+      console.log(
+        `[Events POST] vs-debug | bodyHasVS=${data.visualStyle !== undefined}` +
+        ` | userDefaultVS=${dvsDesc}` +
+        ` | folder=${data.folderId ?? "none"}` +
+        ` | resolved=${resolvedVisualStyle != null ? "SET" : "NULL"}` +
+        ` | seendo=${data.seendoSourceUploadId != null}`
+      )
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const sharedData = {
       title: data.title,
       description: data.description,
@@ -152,7 +194,7 @@ export async function POST(request: Request) {
       location: data.location,
       locationUrl: data.locationUrl,
       folderId: data.folderId,
-      visualStyle: data.visualStyle as unknown as Prisma.InputJsonValue ?? undefined,
+      visualStyle: resolvedVisualStyle,
       mentalEnergy: data.mentalEnergy,
       physicalEnergy: data.physicalEnergy,
       difficulty: data.difficulty,
@@ -160,6 +202,8 @@ export async function POST(request: Request) {
       isFixed: data.isFixed,
       productivityModel: data.productivityModel,
       folderFieldValues: data.folderFieldValues as unknown as Prisma.InputJsonValue ?? undefined,
+      seendoSourceUploadId: data.seendoSourceUploadId,
+      seendoImages: data.seendoImages as unknown as Prisma.InputJsonValue ?? undefined,
       userId: user.id,
       source: "plandoom",
     }

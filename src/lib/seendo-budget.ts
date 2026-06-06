@@ -1,16 +1,17 @@
 import type { SeendoBudgetStatus } from "@/types"
 
-// Data di reset: 1° del mese successivo
+// Stima display-only: +24h dall'ora attuale. Il valore reale viene da /api/seendo/budget.
 export function getSeendoResetDate(): Date {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  return new Date(Date.now() + 24 * 60 * 60 * 1000)
 }
 
-// Restituisce lo stato del budget per l'utente dato.
-// Per ora sempre 'active' — la logica reale verrà aggiunta quando
-// il sistema di tracking dei token sarà in produzione.
+// Client-safe: chiama l'endpoint autenticato.
+// Usata da Seendo.tsx e SeendoLogo.tsx come queryFn di TanStack Query.
 export async function getSeendoBudgetStatus(
   _userId: string
 ): Promise<SeendoBudgetStatus> {
-  return "active"
+  const res = await fetch("/api/seendo/budget")
+  if (!res.ok) return "active"
+  const data = (await res.json()) as { status: SeendoBudgetStatus }
+  return data.status
 }

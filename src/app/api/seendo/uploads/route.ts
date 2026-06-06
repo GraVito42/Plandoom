@@ -9,6 +9,7 @@ const createSchema = z.object({
   documentType: z.string().optional(),
   referencePeriod: z.string().optional(),
   timezone: z.string().optional(),
+  fileSizeBytes: z.number().int().optional(),
   extractedEvents: z.array(
     z.object({
       title: z.string(),
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
         documentType: parsed.documentType,
         referencePeriod: parsed.referencePeriod,
         timezone: parsed.timezone,
+        fileSizeBytes: parsed.fileSizeBytes,
         extractedEvents: parsed.extractedEvents as unknown as SeendoExtractedEvent[],
         importedEventIds: parsed.importedEventIds,
       },

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Pencil, Trash2, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react"
+import { SEENDO_DAILY_LIMIT, SEENDO_RESTRICTED_THRESHOLD, SEENDO_WINDOW_MS } from "@/lib/seendo-limits"
 import { pathToPoints, smoothedPath } from "@/lib/shapeUtils"
 import PolygonEditor from "@/components/events/EventForm/tabs/PolygonEditor"
 
@@ -454,19 +455,20 @@ type AdminUser = {
   email: string
   role: string
   createdAt: string
+  seendoTokensUsed: number
+  seendoTokensResetAt: string | null
+  seendoStorageBytes: number
   _count: { events: number; chips: number; folders: number; palettes: number }
 }
 
-type SortKey = "name" | "email" | "role" | "createdAt" | "events" | "chips" | "folders" | "palettes" | "storage"
+type SortKey = "name" | "email" | "role" | "createdAt" | "events" | "chips" | "folders" | "palettes" | "storage" | "seendoTokens"
 type SortDir = "asc" | "desc"
 
-function storageKb(u: AdminUser): number {
-  return u._count.events * 2 + u._count.chips * 1 + u._count.folders * 1 + u._count.palettes * 1
-}
-
-function formatStorage(kb: number): string {
-  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`
-  return `${kb.toFixed(1)} KB`
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${bytes} B`
 }
 
 // ── AdminUsers ────────────────────────────────────────────────────────────────
@@ -505,8 +507,11 @@ function AdminUsers() {
     let av: string | number
     let bv: string | number
     if (sortKey === "storage") {
-      av = storageKb(a)
-      bv = storageKb(b)
+      av = a.seendoStorageBytes
+      bv = b.seendoStorageBytes
+    } else if (sortKey === "seendoTokens") {
+      av = a.seendoTokensUsed
+      bv = b.seendoTokensUsed
     } else if (sortKey === "events" || sortKey === "chips" || sortKey === "folders" || sortKey === "palettes") {
       av = a._count[sortKey]
       bv = b._count[sortKey]
@@ -532,6 +537,7 @@ function AdminUsers() {
     { key: "folders", label: "Folders", align: "right" },
     { key: "palettes", label: "Palettes", align: "right" },
     { key: "storage", label: "Storage", align: "right" },
+    { key: "seendoTokens", label: "Seendo", align: "right" },
   ]
 
   return (
@@ -583,17 +589,261 @@ function AdminUsers() {
                   <td className="px-3 py-2 text-right font-mono text-smoke-300">{u._count.chips}</td>
                   <td className="px-3 py-2 text-right font-mono text-smoke-300">{u._count.folders}</td>
                   <td className="px-3 py-2 text-right font-mono text-smoke-300">{u._count.palettes}</td>
-                  <td className="px-3 py-2 text-right font-mono text-smoke-500">{formatStorage(storageKb(u))}</td>
+                  <td className="px-3 py-2 text-right font-mono text-smoke-500">{formatBytes(u.seendoStorageBytes)}</td>
+                  <td className="px-3 py-2">
+                    <SeendoTokenCell used={u.seendoTokensUsed} resetAt={u.seendoTokensResetAt} />
+                  </td>
                 </tr>
               ))}
               {sorted.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center text-smoke-600">No users found.</td>
+                  <td colSpan={10} className="px-3 py-6 text-center text-smoke-600">No users found.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── SeendoTokenCell ───────────────────────────────────────────────────────────
+
+function SeendoTokenCell({ used, resetAt }: { used: number; resetAt: string | null }) {
+  const now = Date.now()
+  const isActive = resetAt !== null && now - new Date(resetAt).getTime() <= SEENDO_WINDOW_MS
+  const pct = Math.min(100, (used / SEENDO_DAILY_LIMIT) * 100)
+  const barColor =
+    used >= SEENDO_DAILY_LIMIT
+      ? "bg-red-500"
+      : used >= SEENDO_DAILY_LIMIT * SEENDO_RESTRICTED_THRESHOLD
+      ? "bg-amber-400"
+      : "bg-green-400"
+
+  return (
+    <div className="flex items-center justify-end gap-2 min-w-[80px]">
+      <div className="w-14 h-1 rounded-full bg-smoke-800 overflow-hidden">
+        <div className={`h-full rounded-full ${isActive ? barColor : "bg-smoke-700"}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`font-mono text-[11px] w-12 text-right ${isActive ? "text-smoke-300" : "text-smoke-600"}`}>
+        {used.toLocaleString()}
+      </span>
+    </div>
+  )
+}
+
+// ── AdminSeendoStats ──────────────────────────────────────────────────────────
+
+type SeendoStatsData = {
+  daily: { tokensUsed: number; tokensLimit: number; activeUsers: number }
+  monthly: { tokensUsed: number; tokensLimit: number; monthYear: string }
+  totalUsers: number
+}
+
+type TokenLogBucket = { hour: number; tokens: number; calls: number }
+type TokenLogsData = { buckets: TokenLogBucket[] }
+
+function SeendoBar({ used, limit }: { used: number; limit: number }) {
+  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
+  return (
+    <div className="h-1.5 w-full rounded-full bg-smoke-800 overflow-hidden">
+      <div
+        className="h-full rounded-full bg-doom-gold transition-all"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  )
+}
+
+function AdminSeendoStats() {
+  const { data, isLoading } = useQuery<SeendoStatsData>({
+    queryKey: ["admin-seendo-stats"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/seendo-stats")
+      if (!r.ok) throw new Error("fetch failed")
+      return r.json() as Promise<SeendoStatsData>
+    },
+    staleTime: 60_000,
+  })
+
+  if (isLoading) return <p className="text-xs text-smoke-500">Loading…</p>
+  if (!data) return null
+
+  const dailyPct = data.daily.tokensLimit > 0
+    ? ((data.daily.tokensUsed / data.daily.tokensLimit) * 100).toFixed(1)
+    : "0"
+  const monthlyPct = data.monthly.tokensLimit > 0
+    ? ((data.monthly.tokensUsed / data.monthly.tokensLimit) * 100).toFixed(1)
+    : "0"
+  const [year, month] = data.monthly.monthYear.split("-")
+  const monthLabel = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+  })
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Giornaliera globale */}
+      <div className="flex flex-col gap-2 p-3 rounded-lg border border-smoke-700 bg-navy-950/30">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Daily Global</span>
+          <span className="text-[10px] font-mono text-smoke-400">
+            {data.daily.tokensUsed.toLocaleString()} / {data.daily.tokensLimit.toLocaleString()}
+          </span>
+        </div>
+        <SeendoBar used={data.daily.tokensUsed} limit={data.daily.tokensLimit} />
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-smoke-600">{dailyPct}% used</span>
+          <span className="text-[10px] text-smoke-600">{data.daily.activeUsers} active / {data.totalUsers} users</span>
+        </div>
+      </div>
+
+      {/* Mensile globale */}
+      <div className="flex flex-col gap-2 p-3 rounded-lg border border-smoke-700 bg-navy-950/30">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Monthly Global — {monthLabel}</span>
+          <span className="text-[10px] font-mono text-smoke-400">
+            {data.monthly.tokensUsed.toLocaleString()} / {data.monthly.tokensLimit.toLocaleString()}
+          </span>
+        </div>
+        <SeendoBar used={data.monthly.tokensUsed} limit={data.monthly.tokensLimit} />
+        <span className="text-[10px] text-smoke-600">{monthlyPct}% of monthly budget</span>
+      </div>
+    </div>
+  )
+}
+
+// ── AdminTokenChart ───────────────────────────────────────────────────────────
+
+function AdminTokenChart() {
+  const { data, isLoading } = useQuery<TokenLogsData>({
+    queryKey: ["admin-seendo-token-logs"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/seendo-token-logs")
+      if (!r.ok) throw new Error("fetch failed")
+      return r.json()
+    },
+    staleTime: 60_000,
+  })
+
+  if (isLoading) return <p className="text-xs text-smoke-500">Loading…</p>
+  if (!data) return null
+
+  const { buckets } = data
+  const maxTokens = Math.max(...buckets.map((b) => b.tokens), 1)
+  const totalTokens = buckets.reduce((s, b) => s + b.tokens, 0)
+  const totalCalls = buckets.reduce((s, b) => s + b.calls, 0)
+
+  const W = 240
+  const H = 60
+  const barW = W / 24
+  const gap = 1.5
+
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-lg border border-smoke-700 bg-navy-950/30">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-smoke-500 uppercase tracking-wider">Token Activity — Last 24h</span>
+        <span className="text-[10px] font-mono text-smoke-500">
+          {totalTokens.toLocaleString()} tokens · {totalCalls} calls
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        style={{ height: 60 }}
+        preserveAspectRatio="none"
+      >
+        {buckets.map((b, i) => {
+          const barH = (b.tokens / maxTokens) * (H - 4)
+          const x = i * barW + gap / 2
+          const y = H - (barH || 2)
+          return (
+            <g key={i}>
+              <rect x={x} y={4} width={barW - gap} height={H - 4} fill="#23262a" rx={0.5} />
+              <rect
+                x={x}
+                y={y}
+                width={barW - gap}
+                height={b.tokens > 0 ? barH : 2}
+                fill={b.tokens > 0 ? "#c9a84c" : "#3a3f45"}
+                fillOpacity={b.tokens > 0 ? 0.9 : 0.4}
+                rx={0.5}
+              />
+            </g>
+          )
+        })}
+      </svg>
+      <div className="flex justify-between text-[9px] text-smoke-700 font-mono">
+        <span>24h ago</span>
+        <span>now</span>
+      </div>
+    </div>
+  )
+}
+
+// ── AdminStorageStats ─────────────────────────────────────────────────────────
+
+const R2_FREE_LIMIT_BYTES = 10 * 1024 * 1024 * 1024  // 10 GB — free tier R2
+
+function AdminStorageStats() {
+  const { data: users = [], isLoading } = useQuery<AdminUser[]>({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/users")
+      if (!r.ok) throw new Error("fetch failed")
+      return r.json()
+    },
+    staleTime: 60_000,
+  })
+
+  if (isLoading) return <p className="text-xs text-smoke-500">Loading…</p>
+
+  const totalBytes = users.reduce((sum, u) => sum + u.seendoStorageBytes, 0)
+  const pct = R2_FREE_LIMIT_BYTES > 0 ? Math.min(100, (totalBytes / R2_FREE_LIMIT_BYTES) * 100) : 0
+
+  const topUsers = [...users]
+    .filter((u) => u.seendoStorageBytes > 0)
+    .sort((a, b) => b.seendoStorageBytes - a.seendoStorageBytes)
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Totale globale + progress bar */}
+      <div className="flex flex-col gap-2 p-3 rounded-lg border border-smoke-700 bg-navy-950/30">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-smoke-500 uppercase tracking-wider">R2 Storage — Global</span>
+          <span className="text-[10px] font-mono text-smoke-400">
+            {formatBytes(totalBytes)} / 10 GB
+          </span>
+        </div>
+        <SeendoBar used={totalBytes} limit={R2_FREE_LIMIT_BYTES} />
+        <span className="text-[10px] text-smoke-600">{pct.toFixed(2)}% of free tier limit</span>
+      </div>
+
+      {/* Lista per utente — solo utenti con storage > 0, ordinati per consumo */}
+      {topUsers.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          {topUsers.map((u) => (
+            <div
+              key={u.id}
+              className="flex items-center gap-3 px-3 py-1.5 rounded border border-smoke-800/40 bg-smoke-900/20"
+            >
+              <span className="flex-1 text-xs text-smoke-300 truncate min-w-0">
+                {u.name ?? u.email}
+              </span>
+              {u.name && (
+                <span className="text-[10px] text-smoke-600 font-mono truncate max-w-[160px]">
+                  {u.email}
+                </span>
+              )}
+              <span className="text-[10px] font-mono text-smoke-400 shrink-0">
+                {formatBytes(u.seendoStorageBytes)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-smoke-600 italic">No R2 storage consumed yet.</p>
       )}
     </div>
   )
@@ -616,11 +866,14 @@ export default function AdminTab() {
       <div className="flex flex-col gap-3">
         <div>
           <h3 className="text-sm font-semibold text-smoke-100">AI Usage</h3>
-          <p className="text-[10px] text-smoke-500 mt-0.5">Token consumption across all features</p>
+          <p className="text-[10px] text-smoke-500 mt-0.5">Seendo token consumption — daily window + monthly budget</p>
         </div>
-        <div className="flex items-center gap-3 px-4 py-4 rounded-lg border border-dashed border-smoke-700 bg-navy-950/30">
-          <span className="text-smoke-600 text-xs font-mono">∴</span>
-          <span className="text-xs text-smoke-500">AI token tracking coming soon — will be active once Seendo is live.</span>
+        <AdminSeendoStats />
+        <AdminTokenChart />
+        <div className="mt-2">
+          <h3 className="text-sm font-semibold text-smoke-100">Storage</h3>
+          <p className="text-[10px] text-smoke-500 mt-0.5 mb-3">R2 file storage per user — OCR images + event attachments</p>
+          <AdminStorageStats />
         </div>
       </div>
     </div>

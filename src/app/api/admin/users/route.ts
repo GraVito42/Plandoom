@@ -14,6 +14,9 @@ export async function GET() {
         email: true,
         role: true,
         createdAt: true,
+        seendoTokensUsed: true,
+        seendoTokensResetAt: true,
+        seendoStorageBytes: true,
         _count: {
           select: {
             events: true,
@@ -26,7 +29,10 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     })
 
-    return NextResponse.json(users)
+    // BigInt non è serializzabile con JSON.stringify — converti a Number
+    return NextResponse.json(
+      users.map((u) => ({ ...u, seendoStorageBytes: Number(u.seendoStorageBytes) }))
+    )
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }

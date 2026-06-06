@@ -1,17 +1,18 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import type { ApiEvent, VisualStyle, RepetitionConfig, ApiFolder, ApiPalette } from "@/types"
+import type { ApiEvent, ApiMe, VisualStyle, RepetitionConfig, ApiFolder, ApiPalette } from "@/types"
 import { PX_PER_HOUR } from "@/hooks/useGrid"
 import StyleTab from "./tabs/StyleTab"
 import ContentTab from "./tabs/ContentTab"
 import type { ContentDraft } from "./tabs/ContentTab"
 import FolderTab from "./tabs/FolderTab"
 import LindoPanel from "./panels/LindoPanel"
-import SeendoPanel from "./panels/SeendoPanel"
 import ProDoPanel from "./panels/ProDoPanel"
+import SeendoEventTab from "@/components/events/SeendoEventTab"
+import SeendoLogo from "@/components/magic/SeendoLogo"
 
 const DEFAULT_VISUAL_STYLE: VisualStyle = {
   shape: "rounded",
@@ -281,6 +282,29 @@ export default function EventForm({
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [folderStylePending, setFolderStylePending] = useState<VisualStyle | null>(null)
 
+  // Traccia se localStorage era vuoto al mount: in quel caso lo stile dal server va applicato
+  const localDefaultWasEmpty = useRef(
+    !eventToEdit &&
+      typeof window !== "undefined" &&
+      !localStorage.getItem("plandoom_default_event_style"),
+  )
+
+  // Carica il default personale dal server (cross-device sync)
+  const { data: me } = useQuery<ApiMe>({
+    queryKey: ["me"],
+    queryFn: () => fetch("/api/me").then((r) => r.json() as Promise<ApiMe>),
+    staleTime: 5 * 60 * 1000,
+    enabled: !eventToEdit, // inutile in modalità edit
+  })
+
+  // Applica lo stile del server se localStorage era vuoto (primo accesso su nuovo dispositivo)
+  useEffect(() => {
+    if (!localDefaultWasEmpty.current) return
+    if (!me?.defaultVisualStyle) return
+    localDefaultWasEmpty.current = false
+    setDraft((prev) => ({ ...prev, visualStyle: parseVisualStyle(me.defaultVisualStyle) }))
+  }, [me])
+
   const { data: folders = [] } = useQuery<ApiFolder[]>({
     queryKey: ["folders"],
     queryFn: async () => {
@@ -467,8 +491,6 @@ export default function EventForm({
     else if (action === "delete") void doDelete(scope)
   }
 
-  const seendoImages = (eventToEdit?.seendoImages as string[] | null) ?? []
-
   const durationPx = (() => {
     try {
       const s = new Date(`${draft.startDate}T${draft.startTime}:00`)
@@ -536,7 +558,8 @@ export default function EventForm({
               {styleOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
             </button>
           </div>
-          <div className="px-4 py-1.5 border-r border-smoke-700">
+          <div className="px-4 py-1.5 border-r border-smoke-700 flex items-center gap-1.5">
+            {centerView === "seendo" && <SeendoLogo size="sm" />}
             <span className="text-[10px] text-smoke-500 uppercase tracking-widest">
               {CENTER_LABELS[centerView]}
             </span>
@@ -587,7 +610,16 @@ export default function EventForm({
               />
             )}
             {centerView === "seendo" && (
-              <SeendoPanel seendoImages={seendoImages} eventId={eventToEdit?.id ?? null} />
+              eventToEdit
+                ? <SeendoEventTab
+                    eventId={eventToEdit.id}
+                    seendoSourceUploadId={eventToEdit.seendoSourceUploadId}
+                    seendoImages={eventToEdit.seendoImages}
+                    initialFiles={eventToEdit.seendoFiles}
+                  />
+                : <p className="text-xs text-smoke-500 py-2">
+                    Save the event first to attach files via Seendo.
+                  </p>
             )}
             {centerView === "prodo" && (
               <ProDoPanel draft={draft} onChange={patch} />
@@ -631,13 +663,15 @@ export default function EventForm({
                 key={g.id}
                 type="button"
                 onClick={() => toggleGolem(g.id)}
-                className={`px-4 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                className={`px-4 text-xs font-medium rounded-lg border transition-colors flex items-center justify-center ${
+                  g.id === "seendo" ? "py-1" : "py-1.5"
+                } ${
                   centerView === g.id
                     ? "text-doom-gold border-doom-gold/60 bg-navy-800"
                     : "text-smoke-500 border-smoke-700 hover:text-smoke-300 hover:border-smoke-500"
                 }`}
               >
-                {g.label}
+                {g.id === "seendo" ? <SeendoLogo size={20} /> : g.label}
               </button>
             ))}
           </div>

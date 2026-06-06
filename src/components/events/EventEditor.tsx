@@ -4,6 +4,8 @@ import { useState } from "react"
 import type React from "react"
 import type { ApiEvent, VisualStyle } from "@/types"
 import VisualStylePicker from "./VisualStylePicker"
+import SeendoEventTab from "./SeendoEventTab"
+import SeendoLogo from "@/components/magic/SeendoLogo"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 interface EventEditorProps {
@@ -137,6 +139,7 @@ export default function EventEditor({
   )
   const [styleOpen, setStyleOpen] = useState(false)
   const [folderOpen, setFolderOpen] = useState(false)
+  const [seendoOpen, setSeendoOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -342,6 +345,27 @@ export default function EventEditor({
                   Flexible event — Plando can reschedule it
                 </span>
               </label>
+
+              {/* Seendo — allegati e file OCR (solo in modalità edit) */}
+              {isEdit && eventToEdit && (
+                <div className="border-t border-smoke-700 -mx-4 px-4 pt-3 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setSeendoOpen((o) => !o)}
+                    className="flex items-center justify-center w-full py-1 hover:opacity-70 transition-opacity mb-2"
+                  >
+                    <SeendoLogo size="sm" />
+                  </button>
+                  {seendoOpen && (
+                    <SeendoEventTab
+                      eventId={eventToEdit.id}
+                      seendoSourceUploadId={eventToEdit.seendoSourceUploadId}
+                      seendoImages={eventToEdit.seendoImages}
+                      initialFiles={eventToEdit.seendoFiles}
+                    />
+                  )}
+                </div>
+              )}
             </form>
           </div>
 

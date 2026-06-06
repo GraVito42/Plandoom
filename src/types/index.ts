@@ -83,7 +83,9 @@ export type ApiEvent = {
   externalId: string | null
   source: string | null
   isExternalLinked: boolean
-  seendoImages: unknown
+  seendoImages: string[] | null
+  seendoSourceUploadId: string | null
+  seendoFiles: SeendoFile[] | null
   mentalEnergy: number | null
   physicalEnergy: number | null
   difficulty: number | null
@@ -105,7 +107,20 @@ export type ApiPalette = {
   updatedAt: string
 }
 
-export type SeendoBudgetStatus = "active" | "restricted" | "exhausted"
+export type ApiMe = {
+  role: string
+  defaultVisualStyle: VisualStyle | null
+}
+
+export type SeendoBudgetStatus = "active" | "restricted" | "exhausted" | "call_exhausted"
+
+export type SeendoFile = {
+  url: string     // URL pubblico completo su R2
+  key: string     // chiave R2 (per eliminazione)
+  name: string    // nome originale del file
+  size: number    // dimensione in byte
+  type: string    // MIME type
+}
 
 export type SeendoExtractedEvent = {
   title: string
@@ -113,6 +128,7 @@ export type SeendoExtractedEvent = {
   date: string | null
   startTime: string | null
   endTime: string | null
+  location: string | null
 }
 
 export type SeendoContextForm = {
@@ -122,6 +138,7 @@ export type SeendoContextForm = {
   timezone: string
   documentType: string
   furtherInstructions: string
+  difficulty: "low" | "medium" | "high"
 }
 
 export type ApiSeendoUpload = {

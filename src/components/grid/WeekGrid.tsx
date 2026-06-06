@@ -13,13 +13,18 @@ import {
 import { useChips } from "@/hooks/useChips"
 import { useDragDrop } from "@/hooks/useDragDrop"
 import type { ApiEvent, ApiChip, ApiFolder } from "@/types"
+import { getSeendoResetDate } from "@/lib/seendo-budget"
 import DayColumn from "./DayColumn"
 import EventForm from "../events/EventForm/EventForm"
 import ChipArea from "../chips/ChipArea"
 import Pouch from "../chips/Pouch"
 import Seendo from "../magic/Seendo"
+import SeendoLogo from "../magic/SeendoLogo"
 import Plando from "../magic/Plando"
 import Glando from "../magic/Glando"
+
+// Chiave localStorage usata in Seendo.tsx per attivare/disattivare la linea
+const LS_SEENDO_RESET_LINE = "plandoom_seendo_reset_line"
 
 interface EditorState {
   open: boolean
@@ -66,6 +71,42 @@ export default function WeekGrid() {
   const [seendoOpen, setSeendoOpen] = useState(false)
   const [plandoOpen, setPlandoOpen] = useState(false)
   const [glandoOpen, setGlandoOpen] = useState(false)
+
+  // ── Seendo reset line ────────────────────────────────────────────────────────
+  const [seendoLineActive, setSeendoLineActive] = useState(false)
+  const seendoResetDate = useMemo(() => getSeendoResetDate(), [])
+
+  useEffect(() => {
+    // Se la data di reset è già passata, rimuovi la chiave e non mostrare la linea
+    if (seendoResetDate < new Date()) {
+      localStorage.removeItem(LS_SEENDO_RESET_LINE)
+      setSeendoLineActive(false)
+      return
+    }
+    setSeendoLineActive(localStorage.getItem(LS_SEENDO_RESET_LINE) === "true")
+
+    function handleStorage(e: StorageEvent) {
+      if (e.key === LS_SEENDO_RESET_LINE) {
+        setSeendoLineActive(localStorage.getItem(LS_SEENDO_RESET_LINE) === "true")
+      }
+    }
+    window.addEventListener("storage", handleStorage)
+    return () => window.removeEventListener("storage", handleStorage)
+  }, [seendoResetDate])
+
+  // Restituisce la label formattata (es. "1 Jul") per il giorno che coincide
+  // con la data di reset; stringa vuota se nessuna corrispondenza o linea inattiva
+  function seendoResetLabelForDay(date: Date): string {
+    if (!seendoLineActive) return ""
+    if (
+      seendoResetDate.getFullYear() === date.getFullYear() &&
+      seendoResetDate.getMonth() === date.getMonth() &&
+      seendoResetDate.getDate() === date.getDate()
+    ) {
+      return seendoResetDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+    }
+    return ""
+  }
 
   // Resize state — ref avoids stale closures in the async handler
   const [resizing, setResizingState] = useState<ResizeState | null>(null)
@@ -229,10 +270,10 @@ export default function WeekGrid() {
           </button>
           <button
             onClick={() => setSeendoOpen(true)}
-            className="px-3 py-1.5 text-xs border border-smoke-600 text-smoke-300 hover:text-doom-gold hover:border-doom-gold/50 rounded transition-colors"
+            className="px-3 py-1.5 border border-smoke-600 hover:border-doom-gold/50 rounded transition-colors flex items-center justify-center"
             title="Seendo — scan agenda image"
           >
-            Seendo
+            <SeendoLogo size="sm" />
           </button>
           <button
             onClick={() => setPouchOpen((v) => !v)}
@@ -313,6 +354,7 @@ export default function WeekGrid() {
                 onResizeStart={handleResizeStart}
                 onResizeMove={handleResizeMove}
                 onResizeEnd={handleResizeEnd}
+                seendoResetLabel={seendoResetLabelForDay(date)}
               />
             ))}
           </div>

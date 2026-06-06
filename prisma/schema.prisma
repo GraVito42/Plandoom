@@ -11,10 +11,17 @@ model User {
   clerkId      String   @unique
   email        String   @unique
   name         String?
-  role         String   @default("user")
-  googleTokens Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role                String    @default("user")
+  googleTokens        Json?
+  defaultVisualStyle  Json?     // stile di default per eventi senza folder
+  seendoTokensUsed    Int       @default(0)   // token Gemini consumati nella finestra rolling corrente
+  seendoTokensResetAt DateTime?              // inizio della finestra rolling 24h
+  seendoTokensMonthly Int       @default(0)  // accumulo mensile (mese solare)
+  seendoMonthYear     String?               // es. "2025-01" — mese a cui si riferisce il contatore mensile
+  seendoCallsToday    Int       @default(0)  // chiamate nella finestra rolling corrente (condivide seendoTokensResetAt)
+  seendoStorageBytes  BigInt    @default(0)  // byte totali occupati su R2 (immagini OCR + allegati eventi)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   folders       Folder[]
   events        Event[]
@@ -22,6 +29,7 @@ model User {
   palettes      Palette[]
   folderFields  FolderField[]
   seendoUploads SeendoUpload[]
+  seendoTokenLogs SeendoTokenLog[]
 }
 
 model Folder {
@@ -93,7 +101,10 @@ model Event {
   isExternalLinked Boolean @default(false)
 
   // Seendo
-  seendoImages Json?
+  seendoImages         Json?
+  seendoSourceUploadId String?
+  seendoUpload         SeendoUpload? @relation("SeendoSource", fields: [seendoSourceUploadId], references: [id], onDelete: SetNull)
+  seendoFiles          Json?    // array di { url, key, name, size, type }
 
   // Prodo
   mentalEnergy      Int?
@@ -170,11 +181,23 @@ model SeendoUpload {
   id               String   @id @default(cuid())
   userId           String
   user             User     @relation(fields: [userId], references: [id])
-  imageUrl         String   // URL immagine su storage (placeholder per ora)
+  imageUrl         String   // URL immagine su R2 reading bucket
   documentType     String?
   referencePeriod  String?
   timezone         String?
   extractedEvents  Json     // SeendoExtractedEvent[]
   importedEventIds String[] // ID degli eventi effettivamente importati
+  fileSizeBytes    Int?     // dimensione in byte dell'immagine OCR su R2
   createdAt        DateTime @default(now())
+
+  importedEvents   Event[]  @relation("SeendoSource")
+}
+
+model SeendoTokenLog {
+  id        String   @id @default(cuid())
+  userId    String
+  tokens    Int
+  model     String   // "gemini-2.5-flash" | "gemini-2.0-flash"
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

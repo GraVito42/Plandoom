@@ -4,9 +4,10 @@ import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import type { ApiSeendoUpload, SeendoExtractedEvent } from "@/types"
+import SeendoLogo from "@/components/magic/SeendoLogo"
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("it-IT", {
+  return new Date(iso).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -20,6 +21,22 @@ function fmtDate(iso: string): string {
 function UploadCard({ upload }: { upload: ApiSeendoUpload }) {
   const queryClient = useQueryClient()
   const [importingIdx, setImportingIdx] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/seendo/uploads/${upload.id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      queryClient.setQueryData<ApiSeendoUpload[]>(["seendo-uploads"], (prev) =>
+        (prev ?? []).filter((u) => u.id !== upload.id)
+      )
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
 
   const events = upload.extractedEvents
 
@@ -27,17 +44,34 @@ function UploadCard({ upload }: { upload: ApiSeendoUpload }) {
     if (importingIdx !== null) return
     setImportingIdx(idx)
     try {
-      const startIso = event.startTime
-        ? new Date(`${event.date ?? new Date().toISOString().slice(0, 10)}T${event.startTime}`).toISOString()
-        : new Date(`${event.date ?? new Date().toISOString().slice(0, 10)}T09:00`).toISOString()
-      const endIso = event.endTime
-        ? new Date(`${event.date ?? new Date().toISOString().slice(0, 10)}T${event.endTime}`).toISOString()
-        : new Date(`${event.date ?? new Date().toISOString().slice(0, 10)}T10:00`).toISOString()
+      const dateStr = event.date ?? new Date().toISOString().slice(0, 10)
+      // Stessa logica full-day del flusso OCR (SeendoReview)
+      const isFullDay = !event.startTime
+      let startIso: string
+      let endIso: string
+      if (isFullDay) {
+        startIso = new Date(`${dateStr}T00:00:00`).toISOString()
+        endIso   = new Date(`${dateStr}T23:59:00`).toISOString()
+      } else {
+        startIso = new Date(`${dateStr}T${event.startTime}`).toISOString()
+        endIso   = event.endTime
+          ? new Date(`${dateStr}T${event.endTime}`).toISOString()
+          : new Date(new Date(`${dateStr}T${event.startTime}`).getTime() + 3_600_000).toISOString()
+      }
 
       const res = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: event.title, startTime: startIso, endTime: endIso }),
+        body: JSON.stringify({
+          title: event.title,
+          description: event.description ?? undefined,
+          startTime: startIso,
+          endTime: endIso,
+          isFullDay,
+          location: event.location ?? undefined,
+          seendoSourceUploadId: upload.id,
+          seendoImages: upload.imageUrl ? [upload.imageUrl] : undefined,
+        }),
       })
       if (!res.ok) throw new Error()
       const created = (await res.json()) as { id: string }
@@ -67,18 +101,50 @@ function UploadCard({ upload }: { upload: ApiSeendoUpload }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs text-smoke-100 font-medium">
-            {upload.documentType || "Documento sconosciuto"}
+            {upload.documentType || "Unknown document"}
           </p>
           <p className="text-[10px] text-smoke-500 mt-0.5">
             {upload.referencePeriod
-              ? `Periodo: ${upload.referencePeriod}`
-              : "Periodo non specificato"}
+              ? `Period: ${upload.referencePeriod}`
+              : "Period not specified"}
             {upload.timezone ? ` · ${upload.timezone}` : ""}
           </p>
           <p className="text-[10px] text-smoke-600 mt-0.5">{fmtDate(upload.createdAt)}</p>
         </div>
-        <div className="text-[10px] text-smoke-600 shrink-0">
-          {upload.importedEventIds.length}/{events.length} importati
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className="text-[10px] text-smoke-600">
+            {upload.importedEventIds.length}/{events.length} imported
+          </span>
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-[10px] text-smoke-600 hover:text-doom-ember transition-colors"
+            >
+              Delete
+            </button>
+          ) : (
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[10px] text-smoke-400 text-right max-w-[160px]">
+                Delete this scan? Imported events will not be affected.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="text-[10px] text-smoke-500 hover:text-smoke-200 transition-colors disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-[10px] text-doom-ember hover:text-doom-ember/70 transition-colors disabled:opacity-40"
+                >
+                  {deleting ? "…" : "Confirm"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -124,7 +190,7 @@ function UploadCard({ upload }: { upload: ApiSeendoUpload }) {
                   disabled={importingIdx === i}
                   className="text-[10px] text-doom-gold hover:text-doom-gold/70 transition-colors disabled:opacity-40 shrink-0"
                 >
-                  {importingIdx === i ? "…" : "Importa"}
+                  {importingIdx === i ? "…" : "Import"}
                 </button>
               )}
             </div>
@@ -133,7 +199,7 @@ function UploadCard({ upload }: { upload: ApiSeendoUpload }) {
 
         {events.length === 0 && (
           <p className="px-4 py-3 text-[10px] text-smoke-600 italic">
-            Nessun evento estratto per questo upload.
+            No events extracted for this upload.
           </p>
         )}
       </div>
@@ -154,32 +220,35 @@ export default function SeendoArchivePage() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="shrink-0 border-b border-smoke-800 px-6 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-sm font-semibold text-smoke-100">Seendo — Archive</h1>
+          <div className="flex items-center gap-2">
+            <SeendoLogo size="sm" />
+            <h1 className="text-sm font-semibold text-smoke-100">Seendo — Archive</h1>
+          </div>
           <p className="text-[10px] text-smoke-500 mt-0.5">
-            Storico delle immagini analizzate
+            History of analyzed images
           </p>
         </div>
         <Link
           href="/seendo"
           className="text-[10px] text-smoke-500 hover:text-smoke-200 transition-colors"
         >
-          ← Torna a Seendo
+          ← Back to Seendo
         </Link>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 max-w-2xl w-full mx-auto">
         {isLoading && (
-          <p className="text-xs text-smoke-500 text-center py-8">Caricamento…</p>
+          <p className="text-xs text-smoke-500 text-center py-8">Loading…</p>
         )}
 
         {!isLoading && uploads.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-smoke-500 text-xs">Nessun upload nell&apos;archivio.</p>
+            <p className="text-smoke-500 text-xs">No uploads in the archive.</p>
             <Link
               href="/seendo"
               className="mt-3 inline-block text-[10px] text-doom-gold hover:text-doom-gold/70 transition-colors"
             >
-              Vai a Seendo per analizzare un&apos;immagine →
+              Go to Seendo to analyze an image →
             </Link>
           </div>
         )}

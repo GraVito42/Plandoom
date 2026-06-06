@@ -19,6 +19,8 @@ interface DayColumnProps {
   onResizeStart: (eventId: string, clientY: number) => void
   onResizeMove: (eventId: string, clientY: number) => void
   onResizeEnd: (eventId: string) => void
+  // Etichetta linea reset Seendo (es. "1 Jul"); vuota = linea non mostrata
+  seendoResetLabel?: string
 }
 
 export default function DayColumn({
@@ -34,6 +36,7 @@ export default function DayColumn({
   onResizeStart,
   onResizeMove,
   onResizeEnd,
+  seendoResetLabel,
 }: DayColumnProps) {
   const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
   const { setNodeRef, isOver } = useDroppable({ id: dateStr })
@@ -63,6 +66,37 @@ export default function DayColumn({
           <div className="relative">
             <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-doom-gold" />
             <div className="h-px bg-doom-gold/60 ml-1" />
+          </div>
+        </div>
+      )}
+
+      {/* Linea reset Seendo — appare solo nel giorno in cui si ricarica il budget */}
+      {seendoResetLabel && (
+        <div
+          className="absolute left-0 right-0 z-10 pointer-events-none"
+          style={{ top: 0 }}
+        >
+          <div className="relative">
+            {/* Triangolo Seendo al posto del dot rotondo */}
+            <svg
+              className="absolute -left-1.5 -top-2 text-doom-ember"
+              width="10"
+              height="10"
+              viewBox="0 0 100 100"
+              fill="none"
+            >
+              <polygon
+                points="50,8 96,88 4,88"
+                stroke="currentColor"
+                strokeWidth="10"
+                strokeLinejoin="round"
+                fill="currentColor"
+              />
+            </svg>
+            <div className="h-px bg-doom-ember/60 ml-2" />
+            <span className="absolute left-3 top-0.5 text-[9px] text-doom-ember/80 whitespace-nowrap leading-none">
+              Seendo resets {seendoResetLabel}
+            </span>
           </div>
         </div>
       )}
