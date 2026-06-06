@@ -46,9 +46,10 @@ export function parsePillStyle(visualStyle: unknown): {
     : undefined
 
   const backgroundColor = fillWithOpacity(fillColor, fillOpacity)
+  const displayFrameWidth = Math.min(frameWidth, 2)
   const border =
-    frameWidth > 0 && frameColor !== "transparent"
-      ? `${frameWidth}px solid ${frameColor}`
+    displayFrameWidth > 0 && frameColor !== "transparent"
+      ? `${displayFrameWidth}px solid ${frameColor}`
       : "1px solid rgba(201,168,76,0.3)"
 
   const color = typeof vs?.textColor === "string" ? vs.textColor : getAutoTextColor(fillColor)
