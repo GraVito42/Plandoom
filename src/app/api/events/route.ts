@@ -121,7 +121,7 @@ export async function GET(request: Request) {
         userId: user.id,
         ...(folderId ? { folderId } : {}),
         ...(from && to
-          ? { startTime: { gte: new Date(from) }, endTime: { lte: new Date(to) } }
+          ? { startTime: { lt: new Date(to) }, endTime: { gt: new Date(from) } }
           : {}),
       },
       orderBy: { startTime: "asc" },
