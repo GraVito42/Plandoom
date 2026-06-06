@@ -9,6 +9,15 @@ export function isFullDayEvent(event: ApiEvent): boolean {
   return isAtMidnight && end.getTime() - start.getTime() >= 86_400_000
 }
 
+// Restituisce true se l'evento copre interamente il giorno `date` (midnight→midnight)
+export function isFullDayForDate(event: ApiEvent, date: Date): boolean {
+  const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+  const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0)
+  const eventStart = new Date(event.startTime)
+  const eventEnd = new Date(event.endTime)
+  return eventStart.getTime() <= dayStart.getTime() && eventEnd.getTime() >= dayEnd.getTime()
+}
+
 export function fillWithOpacity(color: string, opacity: number): string {
   if (opacity >= 100 || color === "transparent") return color
   const hex = color.startsWith("#") ? color.slice(1) : null

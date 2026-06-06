@@ -14,7 +14,7 @@ import { useChips } from "@/hooks/useChips"
 import { useDragDrop } from "@/hooks/useDragDrop"
 import type { ApiEvent, ApiChip, ApiFolder } from "@/types"
 import { getSeendoResetDate } from "@/lib/seendo-budget"
-import { isFullDayEvent, parsePillStyle } from "@/lib/eventUtils"
+import { isFullDayEvent, isFullDayForDate, parsePillStyle } from "@/lib/eventUtils"
 import DayColumn from "./DayColumn"
 import EventForm from "../events/EventForm/EventForm"
 import ChipArea from "../chips/ChipArea"
@@ -149,25 +149,46 @@ export default function WeekGrid() {
   )
 
   // Full-day event pills for the band — greedy row assignment
+  // Gestisce sia eventi isFullDay classici che eventi multi-giorno che coprono un giorno intero
   const fullDayPills = useMemo(() => {
-    const fd = events.filter(isFullDayEvent)
     const placed: { ev: ApiEvent; colStart: number; colEnd: number; row: number }[] = []
-    for (const ev of fd) {
-      const s = new Date(ev.startTime)
-      const e = new Date(ev.endTime)
-      const startDiff = Math.floor((s.getTime() - weekStart.getTime()) / 86_400_000)
-      const endDiff = Math.floor((e.getTime() - weekStart.getTime() - 1) / 86_400_000)
-      if (startDiff > 6 || endDiff < 0) continue
-      const colStart = Math.max(0, Math.min(6, startDiff))
-      const colEnd = Math.max(colStart, Math.min(6, endDiff))
+
+    function placeRange(ev: ApiEvent, colStart: number, colEnd: number) {
       let row = 0
       while (placed.some((p) => p.row === row && !(p.colEnd < colStart || p.colStart > colEnd))) {
         row++
       }
       placed.push({ ev, colStart, colEnd, row })
     }
+
+    for (const ev of events) {
+      if (isFullDayEvent(ev)) {
+        // Evento full-day classico: copre tutto il range start→end
+        const s = new Date(ev.startTime)
+        const e = new Date(ev.endTime)
+        const startDiff = Math.floor((s.getTime() - weekStart.getTime()) / 86_400_000)
+        const endDiff = Math.floor((e.getTime() - weekStart.getTime() - 1) / 86_400_000)
+        if (startDiff > 6 || endDiff < 0) continue
+        placeRange(ev, Math.max(0, Math.min(6, startDiff)), Math.max(0, Math.min(6, endDiff)))
+      } else {
+        // Evento non-fullDay: mostra pill solo nei giorni che copre interamente
+        const fullDayCols: number[] = []
+        for (let col = 0; col < 7; col++) {
+          if (isFullDayForDate(ev, weekDays[col])) fullDayCols.push(col)
+        }
+        if (fullDayCols.length === 0) continue
+        // Raggruppa colonne consecutive in range contigui
+        let rangeStart = fullDayCols[0]
+        for (let i = 1; i <= fullDayCols.length; i++) {
+          if (i === fullDayCols.length || fullDayCols[i] !== fullDayCols[i - 1] + 1) {
+            placeRange(ev, rangeStart, fullDayCols[i - 1])
+            if (i < fullDayCols.length) rangeStart = fullDayCols[i]
+          }
+        }
+      }
+    }
     return placed
-  }, [events, weekStart])
+  }, [events, weekStart, weekDays])
 
   const maxPillRow = fullDayPills.length > 0 ? Math.max(...fullDayPills.map((p) => p.row)) : 0
   const fdBandHeight = fullDayPills.length > 0 ? Math.max(28, (maxPillRow + 1) * 26 + 4) : 0
@@ -214,6 +235,7 @@ export default function WeekGrid() {
   function eventsForDay(date: Date): ApiEvent[] {
     return events.filter((ev) => {
       if (isFullDayEvent(ev)) return false
+      if (isFullDayForDate(ev, date)) return false
       const s = new Date(ev.startTime)
       return s.getFullYear() === date.getFullYear() &&
         s.getMonth() === date.getMonth() &&
@@ -225,6 +247,7 @@ export default function WeekGrid() {
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
     return events.filter((ev) => {
       if (isFullDayEvent(ev)) return false
+      if (isFullDayForDate(ev, date)) return false
       const s = new Date(ev.startTime)
       const e = new Date(ev.endTime)
       return s < dayStart && e > dayStart
@@ -395,11 +418,11 @@ export default function WeekGrid() {
           {fullDayPills.length > 0 && (
             <>
               <div
-                className="sticky z-20 bg-navy-950 border-r border-b border-smoke-700"
+                className="sticky z-30 bg-navy-950 border-r border-b border-smoke-700"
                 style={{ top: headerHeight }}
               />
               <div
-                className="sticky z-20 bg-navy-900 border-b border-smoke-700 relative overflow-hidden"
+                className="sticky z-30 bg-navy-900 border-b border-smoke-700 relative overflow-hidden"
                 style={{ top: headerHeight, height: fdBandHeight }}
               >
                 {/* Column dividers */}
