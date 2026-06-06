@@ -105,7 +105,7 @@ export default function DayColumn({
 
       {events.map((ev) => {
         const nextMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0)
-        const isSplitStart = (ev.allowMultiDay ?? false) && new Date(ev.endTime) > nextMidnight
+        const isSplitStart = new Date(ev.endTime) > nextMidnight
         return (
           <EventBlock
             key={ev.id}
@@ -124,6 +124,9 @@ export default function DayColumn({
 
       {(continuationEvents ?? []).map((ev) => {
         const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+        const nextMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0)
+        const endsToday = new Date(ev.endTime) <= nextMidnight
+        const splitType = endsToday ? "end" : "middle"
         return (
           <EventBlock
             key={`${ev.id}-cont`}
@@ -134,8 +137,9 @@ export default function DayColumn({
             onResizeStart={() => {}}
             onResizeMove={() => {}}
             onResizeEnd={() => {}}
-            splitType="end"
+            splitType={splitType}
             overrideStartTime={dayStart}
+            overrideEndTime={endsToday ? undefined : nextMidnight}
             isContinuation
           />
         )

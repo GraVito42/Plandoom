@@ -32,7 +32,7 @@ interface EventBlockProps {
   onResizeStart: (clientY: number) => void
   onResizeMove: (clientY: number) => void
   onResizeEnd: () => void
-  splitType?: "start" | "end"
+  splitType?: "start" | "end" | "middle"
   overrideStartTime?: Date
   overrideEndTime?: Date
   isContinuation?: boolean
@@ -150,8 +150,8 @@ export default function EventBlock({
   const start = new Date(event.startTime)
   const end = new Date(event.endTime)
 
-  const effectiveStart = splitType === "end" && overrideStartTime ? overrideStartTime : start
-  const effectiveEnd = splitType === "start" && overrideEndTime ? overrideEndTime : end
+  const effectiveStart = (splitType === "end" || splitType === "middle") && overrideStartTime ? overrideStartTime : start
+  const effectiveEnd = (splitType === "start" || splitType === "middle") && overrideEndTime ? overrideEndTime : end
 
   const minutesFromStart = (effectiveStart.getHours() - HOUR_START) * 60 + effectiveStart.getMinutes()
   const durationMinutes = Math.max(15, (effectiveEnd.getTime() - effectiveStart.getTime()) / 60_000)
@@ -174,6 +174,8 @@ export default function EventBlock({
       ? { borderTopLeftRadius: radius, borderTopRightRadius: radius, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }
       : splitType === "end"
       ? { borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: radius, borderBottomRightRadius: radius }
+      : splitType === "middle"
+      ? { borderRadius: 0 }
       : { borderRadius: radius }
   )
 

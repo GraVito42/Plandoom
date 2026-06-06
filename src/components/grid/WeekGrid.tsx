@@ -225,7 +225,6 @@ export default function WeekGrid() {
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
     return events.filter((ev) => {
       if (isFullDayEvent(ev)) return false
-      if (!(ev.allowMultiDay ?? false)) return false
       const s = new Date(ev.startTime)
       const e = new Date(ev.endTime)
       return s < dayStart && e > dayStart
