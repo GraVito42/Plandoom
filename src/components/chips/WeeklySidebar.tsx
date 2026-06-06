@@ -7,6 +7,7 @@ import { getMonday } from "@/hooks/useGrid"
 import type { ApiChip } from "@/types"
 import ChipArea from "./ChipArea"
 import FolderSetup from "@/components/folders/FolderSetup"
+import WeeklyNoteEditor from "@/components/notes/WeeklyNoteEditor"
 
 interface WeeklySidebarProps {
   onCollapse?: () => void
@@ -58,6 +59,7 @@ export default function WeeklySidebar({ onCollapse }: WeeklySidebarProps = {}) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3">
+        <WeeklyNoteEditor weekStart={weekStart} />
         <ChipArea
           area="weekly"
           chips={chips}

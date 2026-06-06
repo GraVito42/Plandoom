@@ -30,6 +30,8 @@ model User {
   folderFields  FolderField[]
   seendoUploads SeendoUpload[]
   seendoTokenLogs SeendoTokenLog[]
+  weeklyNotes   WeeklyNote[]
+  dailyNotes    DailyNote[]
 }
 
 model Folder {
@@ -200,4 +202,27 @@ model SeendoTokenLog {
   model     String   // "gemini-2.5-flash" | "gemini-2.0-flash"
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WeeklyNote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  weekStart DateTime // sempre mezzanotte del lunedì della settimana (UTC)
+  content   Json     // Tiptap HTML output
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, weekStart])
+}
+
+model DailyNote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  date      DateTime // mezzanotte UTC del giorno
+  content   Json     // Tiptap HTML output
+  iconColor String   @default("#c9a84c") // doom-gold come default
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
 }
