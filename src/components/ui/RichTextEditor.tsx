@@ -65,7 +65,7 @@ export default function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: "prose prose-invert prose-sm max-w-none focus:outline-none min-h-[80px] px-2 py-1.5",
+        class: "prose prose-invert prose-sm max-w-none focus:outline-none min-h-[80px] px-2 py-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0",
       },
     },
   })
