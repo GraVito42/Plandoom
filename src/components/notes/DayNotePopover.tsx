@@ -27,19 +27,33 @@ const PRESET_COLORS = [
   "#f472b6", // pink
 ]
 
+function colorToFilter(hex: string): string {
+  const map: Record<string, string> = {
+    "#c9a84c": "none",
+    "#f3f4f6": "brightness(0) invert(1)",
+    "#60a5fa": "brightness(0) saturate(100%) invert(58%) sepia(98%) saturate(400%) hue-rotate(190deg) brightness(101%)",
+    "#34d399": "brightness(0) saturate(100%) invert(72%) sepia(50%) saturate(500%) hue-rotate(100deg)",
+    "#f87171": "brightness(0) saturate(100%) invert(55%) sepia(80%) saturate(600%) hue-rotate(320deg)",
+    "#c084fc": "brightness(0) saturate(100%) invert(60%) sepia(60%) saturate(500%) hue-rotate(240deg)",
+    "#fb923c": "brightness(0) saturate(100%) invert(65%) sepia(80%) saturate(600%) hue-rotate(10deg)",
+    "#f472b6": "brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(290deg)",
+  }
+  return map[hex.toLowerCase()] ?? "none"
+}
+
 function PostItIcon({ color, size = 14 }: { color: string; size?: number }) {
   return (
-    <svg
+    <img
+      src="/icons/post-it.png"
+      alt="note"
       width={size}
       height={size}
-      viewBox="0 0 16 16"
-      xmlns="http://www.w3.org/2000/svg"
-      className="transition-transform hover:scale-110 flex-shrink-0"
-    >
-      <rect x="1" y="1" width="14" height="11" rx="1" fill={color} opacity="0.85" />
-      <polygon points="9,12 14,12 14,16" fill={color} opacity="0.5" />
-      <polygon points="9,12 14,16 9,16" fill={color} opacity="0.3" />
-    </svg>
+      style={{
+        filter: colorToFilter(color),
+        transition: "transform 0.15s",
+      }}
+      className="hover:scale-110 flex-shrink-0"
+    />
   )
 }
 
