@@ -179,7 +179,7 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
 
       {/* Popover */}
       {open && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 z-50 mt-1 w-72 bg-navy-900 border border-smoke-700 rounded-lg shadow-2xl p-2 flex flex-col gap-2">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 z-[200] mt-1 w-72 bg-navy-900 border border-smoke-700 rounded-lg shadow-2xl p-2 flex flex-col gap-2">
           {/* Color picker */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] text-smoke-500">Note color:</span>
