@@ -45,7 +45,7 @@ function PostItIcon({ color, size = 14 }: { color: string; size?: number }) {
   return (
     <img
       src="/icons/post-it.png"
-      alt="note"
+      alt=""
       width={size}
       height={size}
       style={{
