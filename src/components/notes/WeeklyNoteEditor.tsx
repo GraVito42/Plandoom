@@ -13,11 +13,20 @@ interface WeeklyNoteResponse {
   content: string | null
 }
 
+const MIN_HEIGHT = 80
+const MAX_HEIGHT = 600
+const DEFAULT_HEIGHT = 160
+
 export default function WeeklyNoteEditor({ weekStart }: WeeklyNoteEditorProps) {
   const weekStartISO = weekStart.toISOString()
   const queryClient = useQueryClient()
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isVisible, setIsVisible] = useState(true)
+  const [editorHeight, setEditorHeight] = useState<number>(() => {
+    if (typeof window === "undefined") return DEFAULT_HEIGHT
+    const saved = localStorage.getItem("plandoom_notes_height")
+    return saved ? parseInt(saved, 10) : DEFAULT_HEIGHT
+  })
 
   const { data } = useQuery<WeeklyNoteResponse>({
     queryKey: ["weeklyNote", weekStartISO],
@@ -43,7 +52,28 @@ export default function WeeklyNoteEditor({ weekStart }: WeeklyNoteEditorProps) {
     [weekStartISO, queryClient]
   )
 
-  const hasContent = !!(data?.content && data.content.replace(/<[^>]*>/g, "").trim())
+  const handleHeightMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startHeight = editorHeight
+
+    const onMouseMove = (e: MouseEvent) => {
+      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + e.clientY - startY))
+      setEditorHeight(newHeight)
+    }
+
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove)
+      document.removeEventListener("mouseup", onMouseUp)
+      setEditorHeight((h) => {
+        localStorage.setItem("plandoom_notes_height", String(h))
+        return h
+      })
+    }
+
+    document.addEventListener("mousemove", onMouseMove)
+    document.addEventListener("mouseup", onMouseUp)
+  }
 
   return (
     <div className="bg-navy-900 border border-smoke-700 rounded-lg mb-3 overflow-hidden transition-all">
@@ -64,15 +94,22 @@ export default function WeeklyNoteEditor({ weekStart }: WeeklyNoteEditorProps) {
 
       {/* Editor area — visibile solo se isVisible=true */}
       {isVisible && (
-        <div
-          className={`p-2 ${hasContent ? "max-h-[240px] overflow-y-auto" : "min-h-[48px]"}`}
-        >
-          <RichTextEditor
-            content={data?.content ?? null}
-            onChange={handleChange}
-            placeholder="Weekly notes..."
+        <>
+          <div
+            className="p-2 overflow-y-auto"
+            style={{ height: editorHeight }}
+          >
+            <RichTextEditor
+              content={data?.content ?? null}
+              onChange={handleChange}
+              placeholder="Weekly notes..."
+            />
+          </div>
+          <div
+            className="w-full h-1.5 cursor-row-resize hover:bg-doom-gold/40 active:bg-doom-gold/70 transition-colors rounded-b-md"
+            onMouseDown={handleHeightMouseDown}
           />
-        </div>
+        </>
       )}
     </div>
   )
