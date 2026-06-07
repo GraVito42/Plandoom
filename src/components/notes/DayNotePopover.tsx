@@ -27,6 +27,22 @@ const PRESET_COLORS = [
   "#f472b6", // pink
 ]
 
+function PostItIcon({ color, size = 14 }: { color: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      xmlns="http://www.w3.org/2000/svg"
+      className="transition-transform hover:scale-110 flex-shrink-0"
+    >
+      <rect x="1" y="1" width="14" height="11" rx="1" fill={color} opacity="0.85" />
+      <polygon points="9,12 14,12 14,16" fill={color} opacity="0.5" />
+      <polygon points="9,12 14,16 9,16" fill={color} opacity="0.3" />
+    </svg>
+  )
+}
+
 function toMidnightUTC(date: Date): Date {
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
 }
@@ -98,33 +114,44 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
     <div className="relative" ref={popoverRef}>
       {/* Header giornaliero */}
       <div className={`py-2 text-center border-b border-smoke-700 ${isToday ? "bg-navy-800/60" : ""}`}>
-        <span
-          className={`text-xs font-semibold tracking-widest uppercase ${
-            isToday ? "text-doom-gold" : "text-smoke-300"
-          }`}
-        >
-          {dayLabel}
-        </span>
-        {/* Numero giorno + indicatori */}
+
+        {/* Riga 1: nome giorno + icona post-it (solo se nota presente) */}
+        <div className="flex items-center justify-center gap-1.5">
+          {/* Spacer sinistro per bilanciare visivamente quando c'è l'icona */}
+          {hasContent && <span className="w-4 flex-shrink-0" />}
+
+          <span
+            className={`text-xs font-semibold tracking-widest uppercase ${
+              isToday ? "text-doom-gold" : "text-smoke-300"
+            }`}
+          >
+            {dayLabel}
+          </span>
+
+          {/* Icona post-it colorata — click apre popover */}
+          {hasContent && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="flex-shrink-0 focus:outline-none"
+              title="Open note"
+            >
+              <PostItIcon color={iconColor} size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Riga 2: numero giorno + matita su hover (solo se non c'è nota) */}
         <div className="group relative flex items-center justify-center gap-1 mt-0.5">
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             className="flex items-center gap-1 focus:outline-none"
           >
-            <span
-              className={`text-xs ${isToday ? "text-doom-gold/70" : "text-smoke-400"}`}
-            >
+            <span className={`text-xs ${isToday ? "text-doom-gold/70" : "text-smoke-400"}`}>
               {date.getDate()}
             </span>
-            {/* Dot colorato se la nota esiste */}
-            {hasContent && (
-              <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: iconColor }}
-              />
-            )}
-            {/* Icona hover se non c'è nota */}
+            {/* Icona matita su hover se non c'è nota */}
             {!hasContent && (
               <Pencil
                 size={9}
@@ -133,6 +160,7 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
             )}
           </button>
         </div>
+
       </div>
 
       {/* Popover */}
