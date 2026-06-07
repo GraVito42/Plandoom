@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ChevronRight } from "lucide-react"
 import WeeklySidebar from "@/components/chips/WeeklySidebar"
 
@@ -10,11 +10,12 @@ const DEFAULT_WIDTH = 256
 
 export default function AppSidebar() {
   const [open, setOpen] = useState(true)
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return DEFAULT_WIDTH
+  const [sidebarWidth, setSidebarWidth] = useState<number>(DEFAULT_WIDTH)
+
+  useEffect(() => {
     const saved = localStorage.getItem("plandoom_sidebar_width")
-    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH
-  })
+    if (saved) setSidebarWidth(parseInt(saved, 10))
+  }, [])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()

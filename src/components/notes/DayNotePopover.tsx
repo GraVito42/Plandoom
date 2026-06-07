@@ -109,8 +109,9 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
   }, [hasContent, open])
 
   // Palette da localStorage — sincronizzata con StyleTab
-  const [paletteColors, setPaletteColors] = useState<string[]>(() => loadPresets())
+  const [paletteColors, setPaletteColors] = useState<string[]>([...PRESET_DEFAULTS])
   useEffect(() => {
+    setPaletteColors(loadPresets())
     const reload = () => setPaletteColors(loadPresets())
     window.addEventListener("plandoom:presets-changed", reload)
     return () => window.removeEventListener("plandoom:presets-changed", reload)

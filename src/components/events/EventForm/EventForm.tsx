@@ -34,15 +34,6 @@ const DEFAULT_VISUAL_STYLE: VisualStyle = {
   leftOffset: 0,
 }
 
-function loadDefaultStyle(): VisualStyle {
-  if (typeof window === "undefined") return DEFAULT_VISUAL_STYLE
-  try {
-    const raw = localStorage.getItem("plandoom_default_event_style")
-    if (raw) return parseVisualStyle(JSON.parse(raw) as unknown)
-  } catch { /* ignore */ }
-  return DEFAULT_VISUAL_STYLE
-}
-
 function parseVisualStyle(raw: unknown): VisualStyle {
   if (!raw || typeof raw !== "object") return DEFAULT_VISUAL_STYLE
   const r = raw as Record<string, unknown>
@@ -149,7 +140,7 @@ function initDraft(
     locationUrl: "",
     repetition: null,
     folderId: prefillFolderId ?? "",
-    visualStyle: loadDefaultStyle(),
+    visualStyle: DEFAULT_VISUAL_STYLE,
     isExternalLinked: false,
     mentalEnergy: 50,
     physicalEnergy: 50,
@@ -288,6 +279,15 @@ export default function EventForm({
       typeof window !== "undefined" &&
       !localStorage.getItem("plandoom_default_event_style"),
   )
+
+  // Carica lo stile di default da localStorage al mount (solo per nuovi eventi)
+  useEffect(() => {
+    if (eventToEdit) return
+    try {
+      const raw = localStorage.getItem("plandoom_default_event_style")
+      if (raw) setDraft((prev) => ({ ...prev, visualStyle: parseVisualStyle(JSON.parse(raw) as unknown) }))
+    } catch { /* ignore */ }
+  }, [])
 
   // Carica il default personale dal server (cross-device sync)
   const { data: me } = useQuery<ApiMe>({

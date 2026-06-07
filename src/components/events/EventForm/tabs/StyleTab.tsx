@@ -350,9 +350,10 @@ interface ColourPresetsPanelProps {
 }
 
 function ColourPresetsPanel({ activeColor, onApply, prioritySwatches }: ColourPresetsPanelProps) {
-  const [presets, setPresets] = useState<string[]>(() => loadPresets())
+  const [presets, setPresets] = useState<string[]>([...PRESET_DEFAULTS])
 
   useEffect(() => {
+    setPresets(loadPresets())
     const reload = () => setPresets(loadPresets())
     window.addEventListener("plandoom:presets-changed", reload)
     return () => window.removeEventListener("plandoom:presets-changed", reload)

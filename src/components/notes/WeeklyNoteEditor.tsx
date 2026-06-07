@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useRef, useCallback, useState } from "react"
+import { useRef, useCallback, useState, useEffect } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import RichTextEditor from "@/components/ui/RichTextEditor"
 
@@ -22,11 +22,12 @@ export default function WeeklyNoteEditor({ weekStart }: WeeklyNoteEditorProps) {
   const queryClient = useQueryClient()
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isVisible, setIsVisible] = useState(true)
-  const [editorHeight, setEditorHeight] = useState<number>(() => {
-    if (typeof window === "undefined") return DEFAULT_HEIGHT
+  const [editorHeight, setEditorHeight] = useState<number>(DEFAULT_HEIGHT)
+
+  useEffect(() => {
     const saved = localStorage.getItem("plandoom_notes_height")
-    return saved ? parseInt(saved, 10) : DEFAULT_HEIGHT
-  })
+    if (saved) setEditorHeight(parseInt(saved, 10))
+  }, [])
 
   const { data } = useQuery<WeeklyNoteResponse>({
     queryKey: ["weeklyNote", weekStartISO],

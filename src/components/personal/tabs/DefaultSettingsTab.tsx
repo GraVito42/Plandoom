@@ -55,8 +55,14 @@ async function patchDefaultStyle(vs: VisualStyle | null): Promise<ApiMe> {
 export default function DefaultSettingsTab() {
   const queryClient = useQueryClient()
 
-  // Inizializza subito da localStorage per evitare flash al mount
-  const [vs, setVs] = useState<VisualStyle>(() => loadDefaultEventStyle())
+  const [vs, setVs] = useState<VisualStyle>({ ...FACTORY_DEFAULT })
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY)
+      if (raw) setVs({ ...FACTORY_DEFAULT, ...(JSON.parse(raw) as Partial<VisualStyle>) })
+    } catch { /* ignore */ }
+  }, [])
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
 
