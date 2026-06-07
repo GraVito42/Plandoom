@@ -81,6 +81,14 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
   const hasContent = !!(data?.content && data.content.replace(/<[^>]*>/g, "").trim())
   const iconColor = data?.iconColor ?? "#c9a84c"
 
+  // Icona post-it visibile solo dopo la chiusura del popover, non durante la digitazione
+  const [savedHasContent, setSavedHasContent] = useState(false)
+  useEffect(() => {
+    if (!open) {
+      setSavedHasContent(hasContent)
+    }
+  }, [hasContent, open])
+
   const save = useCallback(
     (content: string, color?: string) => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
@@ -132,7 +140,7 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
         {/* Riga 1: nome giorno + icona post-it (solo se nota presente) */}
         <div className="flex items-center justify-center gap-1.5">
           {/* Spacer sinistro per bilanciare visivamente quando c'è l'icona */}
-          {hasContent && <span className="w-4 flex-shrink-0" />}
+          {savedHasContent && <span className="w-4 flex-shrink-0" />}
 
           <span
             className={`text-xs font-semibold tracking-widest uppercase ${
@@ -142,8 +150,8 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
             {dayLabel}
           </span>
 
-          {/* Icona post-it colorata — click apre popover */}
-          {hasContent && (
+          {/* Icona post-it colorata — appare solo dopo chiusura popover */}
+          {savedHasContent && (
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -165,8 +173,8 @@ export default function DayNotePopover({ date, dayLabel, isToday }: DayNotePopov
             <span className={`text-xs ${isToday ? "text-doom-gold/70" : "text-smoke-400"}`}>
               {date.getDate()}
             </span>
-            {/* Icona matita su hover se non c'è nota */}
-            {!hasContent && (
+            {/* Icona matita su hover se non c'è nota salvata */}
+            {!savedHasContent && (
               <Pencil
                 size={9}
                 className="text-smoke-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
