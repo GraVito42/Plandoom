@@ -41,60 +41,30 @@ function loadPresets(): string[] {
   return [...PRESET_DEFAULTS]
 }
 
-// ── Filtro CSS per colorare il PNG del post-it ────────────────────────────────
-
-function hexToHsl(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16) / 255
-  const g = parseInt(hex.slice(3, 5), 16) / 255
-  const b = parseInt(hex.slice(5, 7), 16) / 255
-  const max = Math.max(r, g, b), min = Math.min(r, g, b)
-  let h = 0, s = 0
-  const l = (max + min) / 2
-  if (max !== min) {
-    const d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6
-    else if (max === g) h = ((b - r) / d + 2) / 6
-    else h = ((r - g) / d + 4) / 6
-  }
-  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)]
-}
-
-function colorToFilter(hex: string): string {
-  const known: Record<string, string> = {
-    "#c9a84c": "none",
-    "#f3f4f6": "brightness(0) invert(1)",
-    "#ffffff": "brightness(0) invert(1)",
-    "#60a5fa": "brightness(0) saturate(100%) invert(58%) sepia(98%) saturate(400%) hue-rotate(190deg) brightness(101%)",
-    "#34d399": "brightness(0) saturate(100%) invert(72%) sepia(50%) saturate(500%) hue-rotate(100deg)",
-    "#f87171": "brightness(0) saturate(100%) invert(55%) sepia(80%) saturate(600%) hue-rotate(320deg)",
-    "#c084fc": "brightness(0) saturate(100%) invert(60%) sepia(60%) saturate(500%) hue-rotate(240deg)",
-    "#fb923c": "brightness(0) saturate(100%) invert(65%) sepia(80%) saturate(600%) hue-rotate(10deg)",
-    "#f472b6": "brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(290deg)",
-  }
-  const lower = hex.toLowerCase()
-  if (known[lower]) return known[lower]
-  if (!/^#[0-9a-f]{6}$/.test(lower)) return "none"
-  const [h, s, l] = hexToHsl(lower)
-  if (l > 85 && s < 20) return "brightness(0) invert(1)"
-  if (l < 15) return "brightness(0)"
-  const rotate = (h - 45 + 360) % 360
-  const bright = (0.5 + l / 200).toFixed(2)
-  return `brightness(0) saturate(${Math.max(50, s)}%) hue-rotate(${rotate}deg) brightness(${bright})`
-}
+// ── PostItIcon — CSS mask-image per colorazione arbitraria ────────────────────
+// Il PNG viene usato come maschera: backgroundColor si vede solo dove il PNG
+// è opaco (richiede sfondo trasparente nel file post-it.png).
 
 function PostItIcon({ color, size = 14 }: { color: string; size?: number }) {
   return (
-    <img
-      src="/icons/post-it.png"
-      alt=""
-      width={size}
-      height={size}
+    <span
       style={{
-        filter: colorToFilter(color),
+        display: "inline-block",
+        width: size,
+        height: size,
+        backgroundColor: color,
+        maskImage: "url('/icons/post-it.png')",
+        maskSize: "contain",
+        maskRepeat: "no-repeat",
+        maskPosition: "center",
+        WebkitMaskImage: "url('/icons/post-it.png')",
+        WebkitMaskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
         transition: "transform 0.15s",
+        flexShrink: 0,
       }}
-      className="hover:scale-110 flex-shrink-0"
+      className="hover:scale-110"
     />
   )
 }
